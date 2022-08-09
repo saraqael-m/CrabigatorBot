@@ -1,5 +1,6 @@
 ﻿const { SlashCommandBuilder } = require('@discordjs/builders');
 const { EmbedBuilder } = require('discord.js');
+var pendingSubmissions = 0;
 
 const itemNames = {
     r: 'Radical',
@@ -40,7 +41,14 @@ module.exports = {
         .addStringOption(option =>
             option.setName('source')
                 .setDescription('The AI used to generate the image (or other possible source).')
-                .setRequired(true))
+                .setRequired(true)
+                .addChoices(
+                    { name: 'Midjourney (Paid)', value: 'midjourney_paid' },
+                    { name: 'Midjourney (Free)', value: 'midjourney_free' },
+                    { name: 'DALL-E 2', value: 'dall-e_2' },
+                    { name: 'Other AI (Commercial)', value: 'commercial' },
+                    { name: 'Other AI (Personal)', value: 'personal' },
+                    { name: 'Own Drawing', value: 'drawing' }))
         .addStringOption(option =>
             option.setName('prompt')
                 .setDescription('The prompt that was inputted into the AI to generate the image.')
@@ -52,7 +60,7 @@ module.exports = {
                 .addChoices(
                     { name: 'Meaning', value: 'm' },
                     { name: 'Reading', value: 'r' },
-                    { name: 'Both', value: 'b' },))
+                    { name: 'Both', value: 'b' }))
         .addAttachmentOption(option =>
             option.setName('image')
                 .setDescription('The generated image.')
@@ -64,8 +72,14 @@ module.exports = {
         .addUserOption(option =>
             option.setName('user')
                 .setDescription('User that created the image (if left unfilled the user is the submitter). (Optional)')
+                .setRequired(false))
+        .addStringOption(option =>
+            option.setName('otheruser')
+                .setDescription('User that created the image (used if creator has no discord account). (Optional)')
                 .setRequired(false)),
     async execute(interaction) {
+        pendingSubmissions++;
+        while (pending)
         const submit = require('../DBhandler.js').submit;
 
         const char = interaction.options.getString('char'),
@@ -76,29 +90,46 @@ module.exports = {
             mnemonictype = interaction.options.getString('mnemonictype'),
             image = interaction.options.getAttachment('image'),
             remarks = interaction.options.getString('remarks'),
-            user = interaction.options.getUser('user');
+            user = interaction.options.getUser('user'),
+            otheruser = interaction.options.getString('otheruser');
 
-        const [newSubmission, item, submissionPlace] = await submit(char, meaning, type, source, prompt, mnemonictype, image.url, remarks, user != null ? user : interaction.user);
+        const sendEmbed = new EmbedBuilder()
+            .setColor(0xe8c227)
+            .setTitle('Submission - ' + itemNames[type] + ' ' + char)
+            .setDescription('**Pending:** Sending the submission...');
+        await interaction.reply({ embeds: [sendEmbed] });
+
+        const [newSubmission, item, submissionPlace] = await submit(char, meaning, type, source, prompt, mnemonictype, image.url, remarks, user != null ? user : interaction.user, otheruser);
         
         if (newSubmission == undefined) {
+            var errorEmbed = new EmbedBuilder()
+                .setColor(0xe83427)
+                .setTitle('Submission - ' + itemNames[type] + ' ' + item.char);
             switch (item) {
                 case 'not_found':
-                    interaction.reply({ content: 'Sorry, but the requested item could not be found!', ephemeral: true });
+                    errorEmbed.setDescription('**Error:** Sorry, but the requested item could not be found!');
                     break;
                 case 'database_error':
-                    interaction.reply({ content: 'Sorry, but there was a database error!', ephemeral: true });
+                    errorEmbed.setDescription('**Error:** Sorry, but there was a database error!');
+                    break;
+                case 'image_upload_error':
+                    errorEmbed.setDescription('**Error:** Sorry, but the image could not be uploaded!');
+                    break;
+                default:
+                    errorEmbed.setDescription('**Error:** Sorry, but an unknown error occured!');
                     break;
             }
+            await interaction.editReply({ embeds: [errorEmbed] });
             return;
         }
             
-        const response = String(`*${newSubmission.user[1]}* made a submission for the **${mnemonicNames[mnemonictype]} mnemonic** of a level ${item.level} ${itemNames[type]}:\n\n **${item.char}** (${item.meaning})\nIt was successfully submitted as submission ${submissionPlace}!\n\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\nHere is the image:`);
-        const embed = new EmbedBuilder()
+        const response = String(`*${newSubmission.user[1]}* made a submission for the **${mnemonicNames[mnemonictype]} mnemonic** of a level ${item.level} ${itemNames[type]}:\n\n **${item.char}** (${item.meaning})\nIt was successfully submitted as submission ${submissionPlace}!\n\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\nHere is the [image](${newSubmission.link}):`);
+        const doneEmbed = new EmbedBuilder()
             .setColor(0x08c92c)
             .setTitle('Submission - ' + itemNames[type] + ' ' + item.char)
             .setDescription(response)
             .setImage(newSubmission.link)
             .setTimestamp();
-        interaction.reply({embeds: [embed]});
+        await interaction.editReply({ embeds: [doneEmbed] });
     }
 };

@@ -1,8 +1,8 @@
-﻿const { botToken } = require('./tokens.json');
-const guildId = '1003902017204400278';
+﻿const { botToken, guildId, channelIds: { announceId } } = require('../tokens.json');
 
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
 const fs = require('fs');
+const { backup } = require('./DBhandler.js')
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildIntegrations], partials: ["CHANNEL"] });
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
@@ -22,7 +22,7 @@ client.on('ready', async () => {
         client.commands.set(command.data.name, command);
     }
     console.log('The Crabigator is here :)');
-    //(await client.channels.fetch('1003902017804177420')).send({ content: 'The Crabigator has arrived.' });
+    //(await client.channels.fetch(announceId)).send({ content: 'The Crabigator has arrived.' });
     //require('./artworkSubmitter.js').submitAll(client); // added amandabear mnemonics
 });
 
@@ -35,12 +35,20 @@ client.on('messageCreate', async msg => {
     if (command == 'progress') {
         msg.channel.send('pong');
     } else if (command == 'stop') {
-        if (msg.member.roles.cache.some(role => role.name === 'Staff') != undefined) {
-            console.log('The Crabigator is not here anymore :(')
+        if (msg.member.roles.cache.some(role => role.name === 'Staff')) {
+            console.log('The Crabigator is not here anymore :(');
             await msg.react('👋');
-            (await client.channels.fetch('1003902017804177420')).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
+            (await client.channels.fetch(announceId)).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
         } else {
-            await msg.react('🙅‍');
+            await msg.react('👎');
+        }
+    } else if (command == 'backup') {
+        if (msg.member.roles.cache.some(role => role.name === 'Staff')) {
+            msg.react('👍');
+            await backup();
+            msg.channel.send('Made a backup!');
+        } else {
+            await msg.react('👎');
         }
     }
 });

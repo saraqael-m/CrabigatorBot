@@ -1,5 +1,4 @@
-const { botToken, clientId } = require('./tokens.json');
-const guildId = '1003902017204400278';
+const { botToken, clientId, guildId } = require('../tokens.json');
 
 const { REST, Routes } = require('discord.js');
 
