@@ -1,6 +1,6 @@
 {
   "name": "crabigatorbot",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Discord bot for the WaniKani AI Mnemonics project.",
   "main": "main.js",
   "scripts": {
@@ -12,6 +12,9 @@
     "bunnycdn-storage": "^1.0.4",
     "discord.js": "^14.1.2",
     "fs": "^0.0.1-security",
+    "jquery": "^3.6.0",
+    "mongodb": "^4.8.1",
+    "node-fetch": "^2.6.7",
     "request": "^2.88.2"
   }
 }

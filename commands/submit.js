@@ -1,19 +1,29 @@
-﻿const { SlashCommandBuilder } = require('@discordjs/builders');
-const { EmbedBuilder } = require('discord.js');
-var pendingSubmissions = 0;
+﻿// console logging
+const namespace = 'Slash';
+const { logger, errorAwait } = require('../helpers/logger.js');
 
-const itemNames = {
-    r: 'Radical',
-    k: 'Kanji',
-    v: 'Vocab',
+// requires
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const { submitEmbed, pendingEmbed, errorEmbed } = require('../helpers/embedder.js');
+
+// database
+const { append, update, finder } = require('../handlers/mongoHandler.js');
+
+// image uploading
+const { uploadImageFromUrl, folderNames } = require('../handlers/bunnyHandler.js');
+const imageNaming = (wkid, itype, mtype, subid, name) => encodeURI(`${wkid}_${itype}${mtype}${subid}_${name}-${new Date().toISOString().match(/[a-zA-Z0-9]/g).join('')}`);
+
+// item data
+const itemData = {
+    r: require('../itemdata/radicals.json'),
+    k: require('../itemdata/kanji.json'),
+    v: require('../itemdata/vocab.json'),
 };
 
-const mnemonicNames = {
-    m: 'meaning',
-    r: 'reading',
-    b: 'reading and meaning',
-};
+// naming schemes
+const { itemNames, mnemonicNames } = require('../helpers/namer.js');
 
+// main
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('submit')
@@ -69,6 +79,10 @@ module.exports = {
             option.setName('remarks')
                 .setDescription('Other important details. (Optional)')
                 .setRequired(false))
+        .addIntegerOption(option =>
+            option.setName('level')
+                .setDescription('The WaniKani level of the item. (Optional)')
+                .setRequired(false))
         .addUserOption(option =>
             option.setName('user')
                 .setDescription('User that created the image (if left unfilled the user is the submitter). (Optional)')
@@ -78,10 +92,9 @@ module.exports = {
                 .setDescription('User that created the image (used if creator has no discord account). (Optional)')
                 .setRequired(false)),
     async execute(interaction) {
-        pendingSubmissions++;
-        while (pending)
-        const submit = require('../DBhandler.js').submit;
+        const { subjectData } = require('../handlers/wkapiHandler.js');
 
+        // get values
         const char = interaction.options.getString('char'),
             meaning = interaction.options.getString('meaning'),
             type = interaction.options.getString('type'),
@@ -90,46 +103,78 @@ module.exports = {
             mnemonictype = interaction.options.getString('mnemonictype'),
             image = interaction.options.getAttachment('image'),
             remarks = interaction.options.getString('remarks'),
-            user = interaction.options.getUser('user'),
+            level = interaction.options.getString('level'),
             otheruser = interaction.options.getString('otheruser');
+        var user = interaction.options.getUser('user');
+        user = user != null ? user : interaction.user;
 
-        const sendEmbed = new EmbedBuilder()
-            .setColor(0xe8c227)
-            .setTitle('Submission - ' + itemNames[type] + ' ' + char)
-            .setDescription('**Pending:** Sending the submission...');
-        await interaction.reply({ embeds: [sendEmbed] });
+        // embeds
+        const embedTitle = 'Submission',
+            embedInfo = itemNames[type] + ' ' + char;
+        const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
-        const [newSubmission, item, submissionPlace] = await submit(char, meaning, type, source, prompt, mnemonictype, image.url, remarks, user != null ? user : interaction.user, otheruser);
-        
-        if (newSubmission == undefined) {
-            var errorEmbed = new EmbedBuilder()
-                .setColor(0xe83427)
-                .setTitle('Submission - ' + itemNames[type] + ' ' + item.char);
-            switch (item) {
-                case 'not_found':
-                    errorEmbed.setDescription('**Error:** Sorry, but the requested item could not be found!');
-                    break;
-                case 'database_error':
-                    errorEmbed.setDescription('**Error:** Sorry, but there was a database error!');
-                    break;
-                case 'image_upload_error':
-                    errorEmbed.setDescription('**Error:** Sorry, but the image could not be uploaded!');
-                    break;
-                default:
-                    errorEmbed.setDescription('**Error:** Sorry, but an unknown error occured!');
-                    break;
+        await interaction.reply({ embeds: [pendingEmbed(embedTitle, '[#--] Searching for the item...', embedInfo)] });
+
+        // main submission code
+        logger(namespace, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
+        const getMeanings = e => e.map(e => e.meaning.toLowerCase());
+        const item = subjectData.find(e => type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.characters == char || e.data.characters == meaning || getMeanings(e.data.meanings).includes(meaning.toLowerCase())));
+        var newSubmission, submissionPlace;
+        if (item == undefined) {
+            logger(namespace, `Submit - 1/3 Find Item`, 'Failed');
+            await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the requested item could not be found!', embedInfo));
+            return false;
+        } else {
+            logger(namespace, `Submit - 1/3 Find Item`, 'Success');
+            await changeEmbed(pendingEmbed(embedTitle, '[##-] Uploading the image...', embedInfo));
+
+            const condition = { char: item.char, meaning: item.meaning, type: type, level: level != null ? level : undefined };
+            let dbEntry = await finder(condition);
+            if (dbEntry.length > 1) console.log('WARNING: Multiple database entries for same query found.');
+            dbEntry = dbEntry[0];
+            submissionPlace = dbEntry != undefined ? dbEntry.submissions.length + 1 : 1;
+            var bunnyLink = await errorAwait(namespace, async (a, b) => await uploadImageFromUrl(a, b), [image.url, folderNames[type] + '/' + imageNaming(item.id, type, mnemonictype, submissionPlace, item.char != null ? item.char : item.meaning)], 'Submit - 2/3 Upload Image', true);
+            if (!bunnyLink) {
+                await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the image could not be uploaded!', embedInfo));
+                return false;
+            } else await changeEmbed(pendingEmbed(embedTitle, '[###] Saving submission to the database...', embedInfo));
+            newSubmission = {
+                "date": new Date(),
+                "user": otheruser != null ? [null, otheruser] : (user != null ? [user.id, user.username + "#" + user.discriminator] : [null, null]),
+                "link": bunnyLink,
+                "mnemonictype": mnemonictype,
+                "source": source,
+                "prompt": prompt,
+                "remarks": remarks != null ? remarks : "",
+                "accepted": false,
+            };
+            let func, currentSubmissions;
+            if (dbEntry != undefined) {
+                currentSubmissions = dbEntry.submissions.slice();
+                currentSubmissions.push(newSubmission);
+                func = async () => await update(condition, { $set: { submissions: currentSubmissions } });
+            } else {
+                dbEntry = {
+                    "char": item.char,
+                    "meaning": item.meaning,
+                    "type": type,
+                    "level": level,
+                    "submissions": [newSubmission],
+                }
+                func = async () => await append(dbEntry);
             }
-            await interaction.editReply({ embeds: [errorEmbed] });
-            return;
+            if (!(await func())) {
+                logger(namespace, 'Submit - 3/3 Save To Database', 'Failed');
+                await changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!', embedInfo));
+                return false;
+            }
+            logger(namespace, 'Submit - 3/3 Save To Database', 'Success');
         }
-            
+        logger(namespace, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Success', new Date());
+
+        // final response
         const response = String(`*${newSubmission.user[1]}* made a submission for the **${mnemonicNames[mnemonictype]} mnemonic** of a level ${item.level} ${itemNames[type]}:\n\n **${item.char}** (${item.meaning})\nIt was successfully submitted as submission ${submissionPlace}!\n\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\nHere is the [image](${newSubmission.link}):`);
-        const doneEmbed = new EmbedBuilder()
-            .setColor(0x08c92c)
-            .setTitle('Submission - ' + itemNames[type] + ' ' + item.char)
-            .setDescription(response)
-            .setImage(newSubmission.link)
-            .setTimestamp();
-        await interaction.editReply({ embeds: [doneEmbed] });
+        await changeEmbed(submitEmbed(embedTitle, response, newSubmission.link, embedInfo));
+        return true;
     }
 };

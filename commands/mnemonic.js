@@ -1,16 +1,13 @@
-﻿const { SlashCommandBuilder } = require('@discordjs/builders');
+﻿// console logging
+const namespace = 'Slash';
+const { logger, errorAwait } = require('../helpers/logger.js');
 
-const itemData = {
-    r: require('../itemdata/radicals.json'),
-    k: require('../itemdata/kanji.json'),
-    v: require('../itemdata/vocab.json'),
-};
+// requires
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const { errorEmbed, pendingEmbed, simpleEmbed } = require('../helpers/embedder.js');
 
-const itemNames = {
-    r: 'Radical',
-    k: 'Kanji',
-    v: 'Vocab',
-};
+// naming scheme
+const { itemNames, wkItemNames, wkItemColors } = require('../helpers/namer.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -30,32 +27,38 @@ module.exports = {
                     { name: 'Vocab', value: 'v' },
                 )),
     async execute(interaction) {
-        const getMeanings = meaning => meaning.split(', ').map(e => e.toLowerCase());
-        const findItem = (arr, name) => arr.find(e => e.char == name || getMeanings(e.meaning).includes(name.toLowerCase()));
+        const { subjectData } = require('../handlers/wkapiHandler.js');
+        logger(namespace, `Mnemonic - Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Pending', new Date());
 
+        const name = interaction.options.getString('name');
+        var type = interaction.options.getString('type');
+
+        // embeds
+        const embedTitle = 'Item Data';
+        var embedInfo = itemNames[type] + ' ' + name;
+        const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
+
+        await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Searching for the item...', embedInfo)] });
+
+        const getMeanings = e => e.map(e => e.meaning.toLowerCase());
+        
         // get item
-        let name = interaction.options.getString('name'),
-            type = interaction.options.getString('type');
-        let item;
-        if (type != null) item = findItem(itemData[type], name);
-        else for (const [arr, arrType] of [[itemData.r, 'r'], [itemData.k, 'k'], [itemData.v, 'v']]) {
-            item = findItem(arr, name);
-            if (item != undefined) {
-                type = arrType;
-                break;
-            }
-        }
+        const item = subjectData.find(e => (e.data.characters == name || e.data.slug.toLowerCase() == name.toLowerCase() || getMeanings(e.data.meanings).includes(name.toLowerCase())) && (type == null || e.object == wkItemNames[type]));
         // respond
         if (item == undefined) {
-            interaction.reply({ content: 'Sorry, but the requested item could not be found!', ephemeral: true });
+            await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the requested item could not be found!'), embedInfo);
         } else {
-            let itemName = '**' + (item.char != null ? item.char : item.meaning) + '**',
-                itemMeaning = item.char != null ? ' (' + item.meaning + ')' : '',
-                itemType = ': ' + itemNames[type],
-                itemLevel = ' from Level ' + item.level,
-                itemMnemonic = '\n```' + item.mnemonic + '```',
-                itemHint = item.hint != undefined ? ('\nHint:```' + item.hint + '```') : '';
-            interaction.reply({ content: itemName + itemMeaning + itemType + itemLevel + itemMnemonic + itemHint });
+            type = item.object[0].toLowerCase();
+            embedInfo = itemNames[type] + ' ' + item.data.slug + ' (Level ' + item.data.level + ')';
+            var itemEmbed = simpleEmbed(wkItemColors[type], embedTitle + ' - ' + embedInfo, '**Meaning Mnemonic:**```' + item.data.meaning_mnemonic + '```' + (item.data.meaning_hint != undefined ? ('Hint:```' + item.data.meaning_hint + '```') : '') + (item.data.reading_mnemonic != undefined ? '\n**Reading Mnemonic:**```' + item.data.reading_mnemonic + '```' + (item.data.reading_hint != undefined ? ('Hint:```' + item.data.reading_hint + '```') : '') : ''))
+                .setURL(item.data.document_url)
+                .addFields(
+                    ...(item.data.meanings != undefined ? [{ name: 'Meaning(s)', value: item.data.meanings.map(e => e.meaning).join(', '), inline: true }] : []),
+                    ...(item.data.readings != undefined ? [{ name: 'Reading(s)', value: item.data.readings.map(e => e.reading).join(', '), inline: true }] : []),
+                    ...(item.data.parts_of_speech != undefined ? [{ name: 'Word Type', value: item.data.parts_of_speech.join(', '), inline: true }] : []),
+                    { name: 'WK ID', value: item.id.toString(), inline: true }
+            );
+            await changeEmbed(itemEmbed);
         }
     }
 };

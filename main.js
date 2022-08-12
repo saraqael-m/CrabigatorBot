@@ -1,17 +1,43 @@
-﻿const { botToken, guildId, channelIds: { announceId } } = require('../tokens.json');
+﻿const { discord: { botToken, guildId, channelIds: { announceId } } } = require('../tokens.json');
 
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
-const fs = require('fs');
-const { backup } = require('./DBhandler.js')
+const { mongoShutdown } = require('./handlers/mongoHandler.js');
+//const { subjectData } = require('./handlers/wkapiHandler.js'); // for startup
+const fs = require('fs'),
+    path = require('path');
 
 const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildIntegrations], partials: ["CHANNEL"] });
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
 
+// emotes
+const { emotes } = require('./helpers/namer.js');
+const stringEmotes = async (msg, emoteList) => {
+    for (const e of emoteList) {
+        const emote = Object.keys(emotes).includes(e) ? emotes[e] : e;
+        await msg.react(emote);
+    }
+}
+
+// bot command prefix
 const prefix = '!';
+
+// empty temp folder
+const tempDir = 'temp';
+fs.readdir(tempDir, (err, files) => {
+    if (err) throw err;
+    const fileNumber = files.length;
+    for (const file of files) {
+        fs.unlink(path.join(tempDir, file), err => {
+            if (err) throw err;
+        });
+    }
+    console.log(`Deleted ${fileNumber} file(s) from "${tempDir}/".`);
+});
 
 client.commands = new Collection();
 
 client.on('ready', async () => {
+    // get commands ready
     const guild = client.guilds.cache.get(guildId);
     let commands;
     if (guild) commands = guild.commands;
@@ -21,7 +47,8 @@ client.on('ready', async () => {
         commands?.create(command.data);
         client.commands.set(command.data.name, command);
     }
-    console.log('The Crabigator is here :)');
+    // announce arrival
+    console.log('The Crabigator is here :)\n');
     //(await client.channels.fetch(announceId)).send({ content: 'The Crabigator has arrived.' });
     //require('./artworkSubmitter.js').submitAll(client); // added amandabear mnemonics
 });
@@ -34,21 +61,16 @@ client.on('messageCreate', async msg => {
 
     if (command == 'progress') {
         msg.channel.send('pong');
-    } else if (command == 'stop') {
+    } else if (command == 'stop') { // stop the bot
         if (msg.member.roles.cache.some(role => role.name === 'Staff')) {
+            console.log('\nShutdown sequence initialized.')
+            await mongoShutdown();
             console.log('The Crabigator is not here anymore :(');
-            await msg.react('👋');
-            (await client.channels.fetch(announceId)).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
+            await stringEmotes(msg, ['BB', 'Y', 'E']);//msg.react(emotes.BB).then(async () => await msg.react(emotes.Y)).then(async () => await msg.react(emotes.E));
+            //(await client.channels.fetch(announceId)).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
+            process.exit();
         } else {
-            await msg.react('👎');
-        }
-    } else if (command == 'backup') {
-        if (msg.member.roles.cache.some(role => role.name === 'Staff')) {
-            msg.react('👍');
-            await backup();
-            msg.channel.send('Made a backup!');
-        } else {
-            await msg.react('👎');
+            await msg.react(emotes.N).then(async () => await msg.react(emotes.O));
         }
     }
 });

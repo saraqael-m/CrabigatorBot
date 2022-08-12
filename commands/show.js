@@ -1,19 +1,26 @@
-﻿const { SlashCommandBuilder } = require('@discordjs/builders');
+﻿// console logging
+const namespace = 'Slash';
+const { logger, errorAwait } = require('../helpers/logger.js');
 
-const databaseName = 'mnemonicDB.json',
-    progressbarWidth = 40;
+// requires
+const { SlashCommandBuilder } = require('@discordjs/builders');
+const { errorEmbed, pendingEmbed, successEmbed } = require('../helpers/embedder.js');
 
+// database
+const { finder } = require('../handlers/mongoHandler.js');
+
+// parameters
+const progressbarWidth = 40;
+
+// itemData
 const itemData = {
     r: require('../itemdata/radicals.json'),
     k: require('../itemdata/kanji.json'),
     v: require('../itemdata/vocab.json'),
 };
 
-const itemNames = {
-    r: 'Radical',
-    k: 'Kanji',
-    v: 'Vocab',
-};
+// naming schemes
+const { itemNames } = require('../helpers/namer.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -58,34 +65,65 @@ module.exports = {
                 .addStringOption(option =>
                     option.setName('source')
                         .setDescription('Item\'s source (e.g. "DALL-E 2" or "Midjourney".')
-                        .setRequired(false))),
+                        .setRequired(false).addChoices(
+                            { name: 'Midjourney (Paid)', value: 'midjourney_paid' },
+                            { name: 'Midjourney (Free)', value: 'midjourney_free' },
+                            { name: 'DALL-E 2', value: 'dall-e_2' },
+                            { name: 'Other AI (Commercial)', value: 'commercial' },
+                            { name: 'Other AI (Personal)', value: 'personal' },
+                            { name: 'Own Drawing', value: 'drawing' })))
+        .addSubcommand(subcommand =>
+            subcommand
+                .setName('mysubmissions')
+                .setDescription('Show images submitted by yourself.')),
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
+        logger(namespace, `Show - '${sub}' Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Pending', new Date());
+
+        // embeds
+        const titles = {
+            progress: 'Progress',
+            submissions: 'Submissions',
+            mysubmissions: 'My Submissions' + (interaction.user != undefined ? ' - ' + interaction.user.username : '')
+        }
+        const embedTitle = titles[sub];
+        const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
+
+        await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
 
         if (sub == 'progress') {
             const percentToBar = (p, n) => {
                 let k = parseInt(p * n);
                 return '#'.repeat(k) + '-'.repeat(n-k);
             }
-            const [itemsFinished, itemsTotal, submissionAmount] = await require('../DBhandler.js').progress(); // db call
+            const fullDatabase = await errorAwait(namespace, async () => await finder({}), [], 'Progress -', true);
+            if (!fullDatabase) {
+                await changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!'));
+                return false;
+            }
+            const itemsFinished = fullDatabase.length,
+                itemsTotal = itemData.r.length + itemData.k.length + itemData.v.length,
+                submissionAmount = fullDatabase.map(e => e.submissions.length).reduce((p, c) => p + c);
             const percentage = itemsFinished / itemsTotal;
-            interaction.reply({ content: `**Progress**\nSubmissions: ${submissionAmount}\nItems Finished: ${itemsFinished}/${itemsTotal}\n[${percentToBar(percentage, progressbarWidth)}] ${(percentage*100).toFixed(2)}%`});
-        } else if (sub == 'submissions') {
-            const submissions = await require('../DBhandler.js').get(
-                interaction.options.getString('char'),
-                interaction.options.getString('meaning'),
-                interaction.options.getString('type'),
-                interaction.options.getInteger('level'),
-                interaction.options.getString('mnemonictype'),
-                interaction.options.getUser('user'),
-                interaction.options.getBoolean('accepted'),
-                interaction.options.getString('source')
-            );
-            const message = await interaction.reply({
-                content: 'Found submission(s):' + submissions.length,
-                fetchReply: true
-            });
-
+            await changeEmbed(successEmbed(embedTitle, `Submissions: ${submissionAmount}\nItems Finished: ${itemsFinished}/${itemsTotal}\n[${percentToBar(percentage, progressbarWidth)}] ${(percentage * 100).toFixed(2)}%`).setTimestamp());
+        } else if (sub == 'submissions' || sub == 'mysubmissions') {
+            const onlyUser = sub == 'mysubmissions';
+            const char = onlyUser ? null : interaction.options.getString('char'),
+                meaning = onlyUser ? null : interaction.options.getString('meaning'),
+                type = onlyUser ? null : interaction.options.getString('type'),
+                level = onlyUser ? null : interaction.options.getInteger('level'),
+                mnemonictype = onlyUser ? null : interaction.options.getString('mnemonictype'),
+                user = onlyUser ? interaction.user : interaction.options.getUser('user'),
+                accepted = onlyUser ? null : interaction.options.getBoolean('accepted'),
+                source = onlyUser ? null : interaction.options.getString('source');
+            const submissions = await finder({
+                ...(char && { char: char }),
+                ...(meaning && { meaning: meaning }),
+                ...(type && { type: type }),
+                ...(level && { level: level }),
+            }).then(subs => subs.map(sub => sub.submissions.filter(s => (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source))).flat());
+            await changeEmbed(successEmbed(embedTitle, 'Found ' + submissions.length + ' submission(s).'));
+            return;
             const addReactions = async () => await message.react('⬅️').then(() => message.react('➡️'));
             const updateMessage = msg => {
                 //msg.reactions.removeAll();
@@ -117,5 +155,6 @@ module.exports = {
                     console.log(4);
                 });
         }
+        return true;
     }
 };
