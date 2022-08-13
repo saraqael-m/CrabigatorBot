@@ -1,6 +1,6 @@
 // console logging
 const namespace = 'WKAPI';
-const { errorAwait } = require('../helpers/logger.js');
+const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
 const { wanikani: { apiv2key } } = require('../../tokens.json');
@@ -15,8 +15,10 @@ const getEndpoint = async url => await fetch(url, {
 }).then(e => e.json());
 
 // startup
-module.exports.subjectData = require('../itemdata/subjectData.json');
+const subjectDataJSONPath = '../itemdata/subjectData.json';
+module.exports.subjectData = require(subjectDataJSONPath);
 module.exports.subjectsUpdated = false;
+
 const getData = async (path) => {
     var data = [], url = 'https://api.wanikani.com/v2/' + path;
     while (1) {
@@ -33,11 +35,11 @@ const getData = async (path) => {
     }
     return data;
 }
-const loadSubjectData = async () => {
+module.exports.wkapiStartup = async () => {
+    // get subject data
     const temp = await errorAwait(namespace, async () => await getData('subjects'), [], 'Retrieve - Subject Data', true);
     if (temp) { // if no error occured
         module.exports.subjectData = temp;
         module.exports.subjectsUpdated = true;
-    }
+    } else logger(namespace, 'Fallback - Subject JSON', 'Used', subjectDataJSONPath);
 }
-loadSubjectData();

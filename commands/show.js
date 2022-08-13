@@ -4,7 +4,7 @@ const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { errorEmbed, pendingEmbed, successEmbed } = require('../helpers/embedder.js');
+const { errorEmbed, pendingEmbed, successEmbed, pagesEmbed } = require('../helpers/embedder.js');
 
 // database
 const { finder } = require('../handlers/mongoHandler.js');
@@ -12,15 +12,10 @@ const { finder } = require('../handlers/mongoHandler.js');
 // parameters
 const progressbarWidth = 40;
 
-// itemData
-const itemData = {
-    r: require('../itemdata/radicals.json'),
-    k: require('../itemdata/kanji.json'),
-    v: require('../itemdata/vocab.json'),
-};
-
 // naming schemes
-const { itemNames } = require('../helpers/namer.js');
+const { itemNames, mnemonicNames } = require('../helpers/namer.js');
+
+var prevCollector;
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -29,7 +24,20 @@ module.exports = {
         .addSubcommand(subcommand =>
             subcommand
                 .setName('progress')
-                .setDescription('Show the progress of this project.'))
+                .setDescription('Show the progress of this project.')
+                .addStringOption(option =>
+                    option.setName('type')
+                        .setDescription('Type of the items (radical, kanji, or vocab).')
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Radical', value: 'r' },
+                            { name: 'Kanji', value: 'k' },
+                            { name: 'Vocab', value: 'v' },
+                        ))
+                .addIntegerOption(option =>
+                    option.setName('level')
+                        .setDescription('Level of the items.')
+                        .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('submissions')
@@ -92,20 +100,27 @@ module.exports = {
         await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
 
         if (sub == 'progress') {
+            const subjectData = require('../handlers/wkapiHandler.js').subjectData;
+            const type = interaction.options.getString('type'),
+                level = interaction.options.getInteger('level');
+
             const percentToBar = (p, n) => {
                 let k = parseInt(p * n);
                 return '#'.repeat(k) + '-'.repeat(n-k);
             }
-            const fullDatabase = await errorAwait(namespace, async () => await finder({}), [], 'Progress -', true);
-            if (!fullDatabase) {
+            const dataquery = await errorAwait(namespace, async () => await finder({
+                ...(type && { type: type }),
+                ...(level && { level: level }),
+            }), [], 'Progress -', true);
+            if (!dataquery) {
                 await changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!'));
                 return false;
             }
-            const itemsFinished = fullDatabase.length,
-                itemsTotal = itemData.r.length + itemData.k.length + itemData.v.length,
-                submissionAmount = fullDatabase.map(e => e.submissions.length).reduce((p, c) => p + c);
+            const itemsFinished = dataquery.length,
+                itemsTotal = subjectData.filter(e => (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
+                submissionAmount = dataquery.map(e => e.submissions.length).reduce((p, c) => p + c, 0);
             const percentage = itemsFinished / itemsTotal;
-            await changeEmbed(successEmbed(embedTitle, `Submissions: ${submissionAmount}\nItems Finished: ${itemsFinished}/${itemsTotal}\n[${percentToBar(percentage, progressbarWidth)}] ${(percentage * 100).toFixed(2)}%`).setTimestamp());
+            await changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `Submissions: ${submissionAmount}\nItems Finished: ${itemsFinished}/${itemsTotal}\n[${percentToBar(percentage, progressbarWidth)}] ${(percentage * 100).toFixed(2)}%`).setTimestamp());
         } else if (sub == 'submissions' || sub == 'mysubmissions') {
             const onlyUser = sub == 'mysubmissions';
             const char = onlyUser ? null : interaction.options.getString('char'),
@@ -118,42 +133,56 @@ module.exports = {
                 source = onlyUser ? null : interaction.options.getString('source');
             const submissions = await finder({
                 ...(char && { char: char }),
-                ...(meaning && { meaning: meaning }),
+                ...(meaning && { meaning: { $regex: meaning } }),
                 ...(type && { type: type }),
                 ...(level && { level: level }),
-            }).then(subs => subs.map(sub => sub.submissions.filter(s => (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source))).flat());
-            await changeEmbed(successEmbed(embedTitle, 'Found ' + submissions.length + ' submission(s).'));
-            return;
-            const addReactions = async () => await message.react('⬅️').then(() => message.react('➡️'));
-            const updateMessage = msg => {
-                //msg.reactions.removeAll();
-                //addReactions();
-                console.log(subPos);
-                msg.edit('Submission ' + subPos + ' of ' + submissions.length);
+            }).then(subs => subs.map(item => item.submissions.filter(s => (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s}))).flat());
+            var currentSub = 0;
+            const updatePages = async (i, edit = false) => {
+                const sub = submissions[currentSub];
+                const embed = pagesEmbed(0x707070, 'Submissions - ' + (currentSub + 1) + ' out of ' + submissions.length, `Submitted on ${sub.date.toUTCString()} by ${sub.user[1]}. The image was uploaded [here](${sub.link}).` + '\nFor more info on this item use `' + `/mnemonic name:${sub.char} type:${itemNames[sub.type]} level:${sub.level}` + '`.', [
+                    ...((char || meaning || type || level || mnemonictype || user || accepted || source) ? [{ name: 'Parameters', value: '\u200B', inline: false }] : []),
+                    ...(char ? [{ name: 'Char', value: char, inline: true }] : []),
+                    ...(meaning ? [{ name: 'Meaning', value: meaning, inline: true }] : []),
+                    ...(type ? [{ name: 'Type', value: itemNames[type], inline: true }] : []),
+                    ...(level ? [{ name: 'Level', value: level.toString(), inline: true }] : []),
+                    ...(mnemonictype ? [{ name: 'Mnemonic', value: mnemonicNames[mnemonictype], inline: true }] : []),
+                    ...(user ? [{ name: 'User', value: user.username + '#' + user.discriminator, inline: true }] : []),
+                    ...(accepted ? [{ name: 'Accepted', value: accepted ? 'Yes' : 'No', inline: true }] : []),
+                    ...(source ? [{ name: 'Source', value: source, inline: true }] : []),
+                    ...((char || meaning || type || level || mnemonictype || user || accepted || source) ? [{ name: '\u200B', value: '\u200B', inline: false }] : []),
+
+                    ...(!(char && meaning && type && level && mnemonictype && user && accepted && source) ? [{ name: 'Properties', value: '\u200B', inline: false }] : []),
+                    ...(!char ? [{ name: 'Char', value: sub.char, inline: true }] : []),
+                    ...(!meaning ? [{ name: 'Meaning', value: sub.meaning, inline: true }] : []),
+                    ...(!type ? [{ name: 'Type', value: itemNames[sub.type], inline: true }] : []),
+                    ...(!level ? [{ name: 'Level', value: sub.level.toString(), inline: true }] : []),
+                    ...(!mnemonictype ? [{ name: 'Mnemonic', value: mnemonicNames[sub.mnemonictype], inline: true }] : []),
+                    ...(!user ? [{ name: 'User', value: sub.user[1], inline: true }] : []),
+                    ...(!accepted ? [{ name: 'Accepted', value: sub.accepted ? 'Yes' : 'No', inline: true }] : []),
+                    ...(!source ? [{ name: 'Source', value: sub.source, inline: true }] : []),
+                ], sub.link, currentSub == submissions.length - 1, currentSub == 0);
+                return await (edit ? i.editReply(embed) : i.update(embed));
             }
-            var subPos = 0;
-            await addReactions().then(updateMessage(message));
+            updatePages(interaction, true);
 
-            const filter = (reaction, user) => {
-                console.log(reaction.emoji.name)
-                return ['⬅️', '➡️'].includes(reaction.emoji.name) && user.id === interaction.user.id;
-            };
-
-            message.awaitReactions({ filter, max: 5, time: 60000, errors: ['time'] })
-                .then(collected => {
-                    const reaction = collected.first();
-
-                    if (reaction.emoji.name === '⬅️') {
-                        subPos = subPos <= 0 ? 0 : subPos - 1;
-                        updateMessage(message);
-                    } else if (reaction.emoji.name === '➡️') {
-                        subPos = subPos >= submissions.length - 1 ? submissions.length - 1 : subPos + 1;
-                        updateMessage(message);
-                    }
-                })
-                .catch(collected => {
-                    console.log(4);
-                });
+            if (prevCollector != undefined) await prevCollector.stop(); // delete old message
+            const collector = interaction.channel.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: 300000 }); // 5 minutes
+            prevCollector = collector;
+            collector.on('collect', async i => {
+                switch (i.customId) {
+                    case 'fullLeft': currentSub = 0; break;
+                    case 'left': currentSub = currentSub <= 0 ? 0 : currentSub - 1; break;
+                    case 'random': currentSub = Math.floor(Math.random() * submissions.length); break;
+                    case 'right': currentSub = currentSub >= submissions.length - 1 ? submissions.length - 1 : currentSub + 1; break;
+                    case 'fullRight': currentSub = submissions.length - 1; break;
+                }
+                await updatePages(i);
+            });
+            collector.on('end', collected => {
+                interaction.deleteReply();
+                logger(namespace, `Collector - ${collected.size} Button Press(es)`, 'Terminated');
+            });
         }
         return true;
     }

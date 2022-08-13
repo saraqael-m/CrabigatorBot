@@ -12,13 +12,7 @@ const { append, update, finder } = require('../handlers/mongoHandler.js');
 // image uploading
 const { uploadImageFromUrl, folderNames } = require('../handlers/bunnyHandler.js');
 const imageNaming = (wkid, itype, mtype, subid, name) => encodeURI(`${wkid}_${itype}${mtype}${subid}_${name}-${new Date().toISOString().match(/[a-zA-Z0-9]/g).join('')}`);
-
-// item data
-const itemData = {
-    r: require('../itemdata/radicals.json'),
-    k: require('../itemdata/kanji.json'),
-    v: require('../itemdata/vocab.json'),
-};
+const possibleExtensions = ['png', 'jpg', 'jpeg', ]
 
 // naming schemes
 const { itemNames, mnemonicNames } = require('../helpers/namer.js');
@@ -103,7 +97,7 @@ module.exports = {
             mnemonictype = interaction.options.getString('mnemonictype'),
             image = interaction.options.getAttachment('image'),
             remarks = interaction.options.getString('remarks'),
-            level = interaction.options.getString('level'),
+            level = interaction.options.getInteger('level'),
             otheruser = interaction.options.getString('otheruser');
         var user = interaction.options.getUser('user');
         user = user != null ? user : interaction.user;
@@ -118,7 +112,7 @@ module.exports = {
         // main submission code
         logger(namespace, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
         const getMeanings = e => e.map(e => e.meaning.toLowerCase());
-        const item = subjectData.find(e => type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.characters == char || e.data.characters == meaning || getMeanings(e.data.meanings).includes(meaning.toLowerCase())));
+        const item = subjectData.find(e => (level == null || e.data.level == level) && (type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.characters == char || e.data.characters == meaning || getMeanings(e.data.meanings).includes(meaning.toLowerCase()))));
         var newSubmission, submissionPlace;
         if (item == undefined) {
             logger(namespace, `Submit - 1/3 Find Item`, 'Failed');
@@ -128,13 +122,14 @@ module.exports = {
             logger(namespace, `Submit - 1/3 Find Item`, 'Success');
             await changeEmbed(pendingEmbed(embedTitle, '[##-] Uploading the image...', embedInfo));
 
-            const condition = { char: item.char, meaning: item.meaning, type: type, level: level != null ? level : undefined };
+            const condition = { char: item.data.slug, meaning: { $in: item.data.meanings.map(m => m.meaning) }, type: type, level: item.data.level };
             let dbEntry = await finder(condition);
             if (dbEntry.length > 1) console.log('WARNING: Multiple database entries for same query found.');
             dbEntry = dbEntry[0];
             submissionPlace = dbEntry != undefined ? dbEntry.submissions.length + 1 : 1;
             var bunnyLink = await errorAwait(namespace, async (a, b) => await uploadImageFromUrl(a, b), [image.url, folderNames[type] + '/' + imageNaming(item.id, type, mnemonictype, submissionPlace, item.char != null ? item.char : item.meaning)], 'Submit - 2/3 Upload Image', true);
             if (!bunnyLink) {
+                logger(namespace, 'Submit - 2/3 Upload Image', 'Failed');
                 await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the image could not be uploaded!', embedInfo));
                 return false;
             } else await changeEmbed(pendingEmbed(embedTitle, '[###] Saving submission to the database...', embedInfo));
@@ -155,10 +150,10 @@ module.exports = {
                 func = async () => await update(condition, { $set: { submissions: currentSubmissions } });
             } else {
                 dbEntry = {
-                    "char": item.char,
-                    "meaning": item.meaning,
+                    "char": item.data.slug,
+                    "meaning": item.data.meanings[0].meaning,
                     "type": type,
-                    "level": level,
+                    "level": item.data.level,
                     "submissions": [newSubmission],
                 }
                 func = async () => await append(dbEntry);
@@ -173,7 +168,7 @@ module.exports = {
         logger(namespace, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Success', new Date());
 
         // final response
-        const response = String(`*${newSubmission.user[1]}* made a submission for the **${mnemonicNames[mnemonictype]} mnemonic** of a level ${item.level} ${itemNames[type]}:\n\n **${item.char}** (${item.meaning})\nIt was successfully submitted as submission ${submissionPlace}!\n\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\nHere is the [image](${newSubmission.link}):`);
+        const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n**Item:**\n${item.data.characters} (${item.data.meanings[0].meaning})\nFor more info on this item use ${'`'}/mnemonic name:${item.data.characters} type:${itemNames[type]} level:${item.data.level}${'`'}.\n\n**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\n**Image:**\nThe image was uploaded [here](${newSubmission.link}).`);
         await changeEmbed(submitEmbed(embedTitle, response, newSubmission.link, embedInfo));
         return true;
     }

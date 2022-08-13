@@ -8,9 +8,7 @@ const { MongoClient, ServerApiVersion } = require('mongodb');
 const connectionString = `mongodb+srv://${mongoUsername}:${mongoPassword}@cluster0.acrkbmu.mongodb.net/wk-mnemonic-images`;
 const client = new MongoClient(connectionString, { useNewUrlParser: true, useUnifiedTopology: true, serverApi: ServerApiVersion.v1 });
 
-// startup
-errorAwait(namespace, async () => await client.connect(), [], 'Startup -');
-const collection = client.db('wk-mnemonic-images').collection('collection');
+var collection;
 
 // main database functions
 module.exports = {
@@ -23,5 +21,9 @@ module.exports = {
     async finder(cond) { return await errorAwait(namespace, async a => await collection.find(a).toArray(), [cond], 'Find -', true); },
     async mongoShutdown() { // shutdown (not necessary)
         return await errorAwait(namespace, async () => await client.close(), [], 'Shutdown -');
+    },
+    async mongoStartup() { // startup
+        return await errorAwait(namespace, async () => await client.connect(), [], 'Startup -')
+            .then(() => collection = client.db('wk-mnemonic-images').collection('main'));
     }
 }

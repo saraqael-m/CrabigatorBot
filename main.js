@@ -1,8 +1,8 @@
 ﻿const { discord: { botToken, guildId, channelIds: { announceId } } } = require('../tokens.json');
 
 const { Client, GatewayIntentBits, Collection } = require('discord.js');
-const { mongoShutdown } = require('./handlers/mongoHandler.js');
-//const { subjectData } = require('./handlers/wkapiHandler.js'); // for startup
+const { mongoStartup, mongoShutdown } = require('./handlers/mongoHandler.js'); // for startup
+const { wkapiStartup } = require('./handlers/wkapiHandler.js'); // for startup
 const fs = require('fs'),
     path = require('path');
 
@@ -37,6 +37,11 @@ fs.readdir(tempDir, (err, files) => {
 client.commands = new Collection();
 
 client.on('ready', async () => {
+    // start all handlers
+    await Promise.all([
+        mongoStartup(),
+        wkapiStartup()
+    ]);
     // get commands ready
     const guild = client.guilds.cache.get(guildId);
     let commands;
@@ -76,14 +81,16 @@ client.on('messageCreate', async msg => {
 });
 
 client.on('interactionCreate', async interaction => {
-    if (!interaction.isChatInputCommand()) return;
-    const command = client.commands.get(interaction.commandName);
-    if (!command) return;
-    try {
-        await command.execute(interaction);
-    } catch (error) {
-        if (error) console.error(error);
-        await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+    if (interaction.isChatInputCommand()) {
+        // slash commands
+        const command = client.commands.get(interaction.commandName);
+        if (!command) return;
+        try {
+            await command.execute(interaction);
+        } catch (error) {
+            if (error) console.error(error);
+            await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
+        }
     }
 });
 

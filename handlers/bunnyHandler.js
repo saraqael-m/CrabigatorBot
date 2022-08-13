@@ -29,10 +29,10 @@ module.exports = {
         };
         const completeFileName = name + fileExt,
             completeTempName = 'temp/bunny' + toB64(Math.floor(Math.random() * (64 ** 8))).padStart(8, '0') + fileExt;
-        await new Promise((resolve, reject) => errorAwait(namespace, () => download(url, completeTempName, async (type, length) => { logger(namespace, 'Upload -', `Type: ${type}; Length: ${length}`); resolve(true); }), [], 'Upload - 1/3 Temp Download'))
-            .then(() => errorAwait(namespace, async (a, b) => await bunnyStorage.upload(a, b), [completeTempName, completeFileName], 'Upload - 2/3 Cloud Upload'))
-            .then(() => errorAwait(namespace, async a => await fs.unlink(a, err => { if (err) console.error(err); }), [completeTempName], 'Upload - 3/3 Temp Deletion'));
-        return bunnyUrl(completeFileName);
+        const noErrors = await new Promise(async (resolve, reject) => { const result = await errorAwait(namespace, () => download(url, completeTempName, async (type, length) => { logger(namespace, 'Upload -', `Type: ${type}; Size: ${(length/1024).toFixed(2)} kB`); resolve(true); }), [], 'Upload - 1/3 Temp Download'); if (!result) reject(false); })
+            .then(b => b && errorAwait(namespace, async (a, b) => await bunnyStorage.upload(a, b), [completeTempName, completeFileName], 'Upload - 2/3 Cloud Upload'))
+            .then(b => b && errorAwait(namespace, async a => await fs.unlink(a, err => { if (err) console.error(err); }), [completeTempName], 'Upload - 3/3 Temp Deletion'));
+        return noErrors ? bunnyUrl(completeFileName) : false;
     },
     async downloadImage(path) {
         // folder in path has to have preceeding slash (e.g. "vocab/")
