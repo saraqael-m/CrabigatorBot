@@ -10,7 +10,7 @@ const { errorEmbed, pendingEmbed, successEmbed, pagesEmbed } = require('../helpe
 const { finder } = require('../handlers/mongoHandler.js');
 
 // parameters
-const progressbarWidth = 40;
+const progressbarWidth = 25;
 
 // naming schemes
 const { itemNames, mnemonicNames } = require('../helpers/namer.js');
@@ -104,9 +104,9 @@ module.exports = {
             const type = interaction.options.getString('type'),
                 level = interaction.options.getInteger('level');
 
-            const percentToBar = (p, n) => {
+            const percentToBar = (p, n) => {//█▁ or #-
                 let k = parseInt(p * n);
-                return '#'.repeat(k) + '-'.repeat(n-k);
+                return '█'.repeat(k) + '▁'.repeat(n-k);
             }
             const dataquery = await errorAwait(namespace, async () => await finder({
                 ...(type && { type: type }),
@@ -120,7 +120,14 @@ module.exports = {
                 itemsTotal = subjectData.filter(e => (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
                 submissionAmount = dataquery.map(e => e.submissions.length).reduce((p, c) => p + c, 0);
             const percentage = itemsFinished / itemsTotal;
-            await changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `Submissions: ${submissionAmount}\nItems Finished: ${itemsFinished}/${itemsTotal}\n[${percentToBar(percentage, progressbarWidth)}] ${(percentage * 100).toFixed(2)}%`).setTimestamp());
+            await changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${percentToBar(percentage, progressbarWidth)}  ${(percentage * 100).toFixed(2)}%\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
+                .addFields(
+                    { name: 'Items Done', value: itemsFinished.toString(), inline: true },
+                    ...(type != 'r' ? [{ name: 'Meaning Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'm')).length.toString(), inline: true }] : []),
+                    ...(type != 'r' ? [{ name: 'Reading Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'r')).length.toString(), inline: true }] : []),
+                    { name: 'Submissions', value: submissionAmount.toString(), inline: false },
+                )
+                .setTimestamp());
         } else if (sub == 'submissions' || sub == 'mysubmissions') {
             const onlyUser = sub == 'mysubmissions';
             const char = onlyUser ? null : interaction.options.getString('char'),
@@ -137,10 +144,14 @@ module.exports = {
                 ...(type && { type: type }),
                 ...(level && { level: level }),
             }).then(subs => subs.map(item => item.submissions.filter(s => (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s}))).flat());
+            if (submissions.length == 0) {
+                await changeEmbed(simpleEmbed(0x707070, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
+                return true;
+            }
             var currentSub = 0;
             const updatePages = async (i, edit = false) => {
                 const sub = submissions[currentSub];
-                const embed = pagesEmbed(0x707070, 'Submissions - ' + (currentSub + 1) + ' out of ' + submissions.length, `Submitted on ${sub.date.toUTCString()} by ${sub.user[1]}. The image was uploaded [here](${sub.link}).` + '\nFor more info on this item use `' + `/mnemonic name:${sub.char} type:${itemNames[sub.type]} level:${sub.level}` + '`.', [
+                const embed = pagesEmbed(0x707070, 'Submissions - ' + (currentSub + 1) + ' out of ' + submissions.length, `Submitted on ${sub.date.toUTCString()} by ${sub.user[1]}. The image was uploaded [here](${sub.imagelink}).` + '\nFor more info on this item use `' + `/mnemonic name:${sub.char} type:${itemNames[sub.type]} level:${sub.level}` + '`.', [
                     ...((char || meaning || type || level || mnemonictype || user || accepted || source) ? [{ name: 'Parameters', value: '\u200B', inline: false }] : []),
                     ...(char ? [{ name: 'Char', value: char, inline: true }] : []),
                     ...(meaning ? [{ name: 'Meaning', value: meaning, inline: true }] : []),
@@ -161,7 +172,7 @@ module.exports = {
                     ...(!user ? [{ name: 'User', value: sub.user[1], inline: true }] : []),
                     ...(!accepted ? [{ name: 'Accepted', value: sub.accepted ? 'Yes' : 'No', inline: true }] : []),
                     ...(!source ? [{ name: 'Source', value: sub.source, inline: true }] : []),
-                ], sub.link, currentSub == submissions.length - 1, currentSub == 0);
+                ], sub.thumblink, currentSub == submissions.length - 1, currentSub == 0);
                 return await (edit ? i.editReply(embed) : i.update(embed));
             }
             updatePages(interaction, true);

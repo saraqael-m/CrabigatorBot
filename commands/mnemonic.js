@@ -57,7 +57,9 @@ module.exports = {
             embedInfo = item.object + ' ' + item.data.characters;
             type = item.object[0].toLowerCase();
             embedInfo = itemNames[type] + ' ' + item.data.slug + ' (Level ' + item.data.level + ')';
-            var itemEmbed = simpleEmbed(wkItemColors[type], embedTitle + ' - ' + embedInfo, (items.length != 1 ? '(Randomly selected out of ' + items.length + ' items.)\n\n' : '') + '**Meaning Mnemonic:**```' + item.data.meaning_mnemonic + '```' + (item.data.meaning_hint != undefined ? ('Hint:```' + item.data.meaning_hint + '```') : '') + (item.data.reading_mnemonic != undefined ? '\n**Reading Mnemonic:**```' + item.data.reading_mnemonic + '```' + (item.data.reading_hint != undefined ? ('Hint:```' + item.data.reading_hint + '```') : '') : ''))
+            const content = ((items.length != 1 ? '(Randomly selected out of ' + items.length + ' items.)\n\n' : '') + '**Meaning Mnemonic:** ```' + item.data.meaning_mnemonic + '```' + (item.data.meaning_hint != undefined ? ('Hint: ```' + item.data.meaning_hint + '```') : '') + (item.data.reading_mnemonic != undefined ? '\n**Reading Mnemonic:** ```' + item.data.reading_mnemonic + '```' + (item.data.reading_hint != undefined ? ('Hint: ```' + item.data.reading_hint + '```') : '') : ''))
+                .replaceAll('<radical>', '*').replaceAll('</radical>', '*').replaceAll('<kanji>', '*').replaceAll('</kanji>', '*').replaceAll('<vocabulary>', '*').replaceAll('</vocabulary>', '*').replaceAll('<ja>', '').replaceAll('</ja>', '');
+            var itemEmbed = simpleEmbed(wkItemColors[type], embedTitle + ' - ' + embedInfo, content)
                 .setURL(item.data.document_url)
                 .addFields(
                     ...(item.data.meanings != undefined ? [{ name: 'Meaning(s)', value: item.data.meanings.map(e => e.meaning).join(', '), inline: true }] : []),
@@ -66,7 +68,7 @@ module.exports = {
                     { name: 'WK ID', value: item.id.toString(), inline: true }
             );
             if (item.data.character_images != undefined) {
-                const characterImage = item.data.character_images.find(e => e.content_type == 'image/png' && parseInt(e.metadata.dimensions.split('x')) < 1000);
+                const characterImage = item.data.character_images.find(e => e.content_type == 'image/png' && parseInt(e.metadata.dimensions.split('x')[0]) < 1000);
                 if (characterImage) itemEmbed = itemEmbed.setThumbnail(characterImage.url);
             }
             await changeEmbed(itemEmbed);
