@@ -4,7 +4,7 @@ const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
 const { SlashCommandBuilder } = require('@discordjs/builders');
-const { errorEmbed, pendingEmbed, successEmbed, pagesEmbed } = require('../helpers/embedder.js');
+const { errorEmbed, pendingEmbed, successEmbed, pagesEmbed, simpleEmbed } = require('../helpers/embedder.js');
 
 // database
 const { finder } = require('../handlers/mongoHandler.js');
