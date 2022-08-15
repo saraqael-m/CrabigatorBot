@@ -5,20 +5,24 @@ const { mongoStartup, mongoShutdown, finder, update } = require('./handlers/mong
 const { wkapiStartup } = require('./handlers/wkapiHandler.js'); // for startup
 const fs = require('fs'),
     path = require('path');
-const { logger, setClient } = require('./helpers/logger.js');
-const namespace = 'Main';
+const { logger, loggerSetClient } = require('./helpers/logger.js'),
+    { voterSetClient, createElection, electionShutdown } = require('./itemVotes.js');
+const logTag = 'Main';
 
-const client = new Client({ intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent, GatewayIntentBits.GuildIntegrations], partials: ["CHANNEL"] });
+const client = new Client({
+    intents: [
+        GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMessages,
+        GatewayIntentBits.MessageContent,
+        GatewayIntentBits.GuildIntegrations,
+        GatewayIntentBits.GuildMessageReactions,
+    ],
+    partials: ["CHANNEL"]
+});
 const commandFiles = fs.readdirSync('./commands').filter(file => file.endsWith('.js'));
 
 // emotes
-const { emotes } = require('./helpers/namer.js');
-const stringEmotes = async (msg, emoteList) => {
-    for (const e of emoteList) {
-        const emote = Object.keys(emotes).includes(e) ? emotes[e] : e;
-        await msg.react(emote);
-    }
-}
+const { stringEmotes } = require('./helpers/messager.js');
 
 // bot command prefix
 const prefix = 'wk!';
@@ -34,20 +38,24 @@ const emptyTemp = () => {
                 if (err) throw err;
             });
         }
-        logger(namespace, `Deleted ${fileNumber} file(s) from "${tempDir}/".`);
+        logger(logTag, `Deleted ${fileNumber} file(s) from "${tempDir}/".`);
     });
 }
 
 client.commands = new Collection();
 
 client.on('ready', async () => {
-    await setClient(client);
-    logger(namespace, 'Startup sequence initialized.');
+    await loggerSetClient(client).then(async () => await voterSetClient(client));
+    logger(logTag, 'Startup sequence initialized.');
     emptyTemp();
     // start all handlers
     await Promise.all([
-        mongoStartup(),
-        wkapiStartup()
+        mongoStartup().then(async () => await Promise.all([
+            await createElection('r'),
+            await createElection('k'),
+            await createElection('v'),
+        ])),
+        //wkapiStartup()
     ]);
     // get commands ready
     const guild = client.guilds.cache.get(guildId);
@@ -60,7 +68,7 @@ client.on('ready', async () => {
         client.commands.set(command.data.name, command);
     }
     // announce arrival
-    logger(namespace, 'The Crabigator is here :)\n');
+    logger(logTag, 'The Crabigator is here :)\n');
     //(await client.channels.fetch(announceId)).send({ content: 'The Crabigator has arrived.' });
     //require('./artworkSubmitter.js').submitAll(client); // added amandabear mnemonics
 });
@@ -73,45 +81,48 @@ client.on('messageCreate', async msg => {
     const replyMsg = async txt => await msg.channel.send({ content: txt, reply: { messageReference: msg.id } });
 
     if (command == 'wani') {
-        logger(namespace, 'Wani - Command', 'Sent', args);
+        logger(logTag, 'Wani - Command', 'Sent', args);
         await replyMsg('kani');
     } else if (command == 'stop') { // stop the bot
         if (msg.member.roles.cache.some(role => role.id === staffId)) {
-            logger(namespace, 'Shutdown sequence initialized.')
-            await mongoShutdown();
-            logger(namespace, 'The Crabigator is not here anymore :(\n');
+            logger(logTag, 'Shutdown sequence initialized.')
+            await electionShutdown()
+                .then(async () => await mongoShutdown());
+            logger(logTag, 'The Crabigator is not here anymore :(\n');
             await stringEmotes(msg, ['BB', 'Y', 'E']);
             //(await client.channels.fetch(announceId)).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
             process.exit();
         } else {
             await stringEmotes(msg, 'NO');
         }
-    } else if (command == 'accept') {
+    } else if (command == 'accept' || command == 'unaccept') {
+        const isUnaccept = command == 'unaccept',
+            name = command.charAt(0).toUpperCase() + command.slice(1);
         if (msg.member.roles.cache.some(role => role.id === pickerId || role.id === pickerId)) {
-            logger(namespace, 'Accept -', 'Pending', args);
+            logger(logTag, name + ' -', 'Pending', args);
             const wkId = parseInt(args[0]),
                 subId = parseInt(args[1]);
             if (!Number.isNaN(wkId) && !Number.isNaN(subId)) {
                 const item = (await finder({ wkId: wkId }))[0];
                 if (item == undefined) {
-                    logger(namespace, 'Accept - Item not Found,', 'Failed');
+                    logger(logTag, name + ' - Item not Found,', 'Failed');
                     await replyMsg('Could not find item.');
                     return false;
                 }
                 const currentSub = item.submissions.find(s => s.subId == subId);
                 if (currentSub == undefined) {
-                    logger(namespace, 'Accept - Submission not Found,', 'Failed');
+                    logger(logTag, name + ' - Submission not Found,', 'Failed');
                     await replyMsg('Could not find submission.');
                     return false;
                 }
-                const updateArray = Object.fromEntries(item.submissions.map((e, i) => [[`submissions.${i}.accepted`], (e.subId == subId) || (item.type != 'r' && currentSub.mnemonictype != 'b' && e.mnemonictype != 'b' && e.mnemonictype != currentSub.mnemonictype && e.accepted == true) ? true : false ]));
+                const updateArray = isUnaccept ? Object.fromEntries([[`submissions.${item.submissions.findIndex(s => s.subId == subId)}.accepted`, false]]) : Object.fromEntries(item.submissions.map((e, i) => [[`submissions.${i}.accepted`], (e.subId == subId) || (item.type != 'r' && currentSub.mnemonictype != 'b' && e.mnemonictype != 'b' && e.mnemonictype != currentSub.mnemonictype && e.accepted == true) ? true : false ]));
                 if (await update({ wkId: wkId }, { $set: updateArray })) {
-                    const changed = item.submissions.filter((s, i) => (s.subId != subId) && (s.accepted != Object.values(updateArray)[i])).map(s => s.subId);
-                    logger(namespace, 'Accept -', 'Success');
-                    await replyMsg(`Accepted submission ${subId} for item ${wkId}.` + (changed.length != 0 ? (changed.length != 1 ? ` Submissions ${changed.join(', ')} were reverted.` : ` Submission ${changed.join(', ')} was unaccepted.`) : ''));
+                    const changed = isUnaccept ? [] : item.submissions.filter((s, i) => (s.subId != subId) && (s.accepted != Object.values(updateArray)[i])).map(s => s.subId);
+                    logger(logTag, name + ' -', 'Success');
+                    await replyMsg(name + `ed submission ${subId} for item ${wkId}.` + (changed.length != 0 ? (changed.length != 1 ? ` Submissions ${changed.join(', ')} were reverted.` : ` Submission ${changed.join(', ')} was unaccepted.`) : ''));
                     return true;
                 } else {
-                    logger(namespace, 'Accept - Database Update', 'Failed');
+                    logger(logTag, name + ' - Database Update', 'Failed');
                     await replyMsg('Could not update database.');
                     return false;
                 }
@@ -119,7 +130,19 @@ client.on('messageCreate', async msg => {
         } else {
             await stringEmotes(msg, 'NO');
         }
-    }
+    } else if (command == 'votes') {
+        const wkId = parseInt(args[0]);
+        if (!Number.isNaN(wkId)) {
+            const item = (await finder({ wkId: wkId }))[0];
+            if (item == undefined) {
+                logger(logTag, name + ' - Item not Found,', 'Failed');
+                await replyMsg('Could not find item.');
+                return false;
+            }
+            await replyMsg(`**Votes for ${wkId}:**\n` + '```' + item.submissions.map(s => `\tSubmission ${s.subId} (${s.mnemonictype}): ${s.votes} vote(s)`).join('\n') + '```');
+            return true;
+        } else await replyMsg('Could not parse argument.');
+    } 
 });
 
 client.on('interactionCreate', async interaction => {
@@ -130,7 +153,7 @@ client.on('interactionCreate', async interaction => {
         try {
             await command.execute(interaction);
         } catch (error) {
-            logger(namespace, `Execute - ${command}`, 'Failed');
+            logger(logTag, `Execute - ${command}`, 'Failed');
             if (error) console.error(error);
             await interaction.reply({ content: 'There was an error while executing this command!', ephemeral: true });
         }

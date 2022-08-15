@@ -1,10 +1,12 @@
 ﻿// console logging
-const namespace = 'Slash';
+const logTag = 'Slash';
 const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { errorEmbed, pendingEmbed, successEmbed, pagesEmbed, simpleEmbed } = require('../helpers/embedder.js');
+const { embedColors } = require('../helpers/styler.js');
+const { itemInfo } = require('../helpers/messager.js');
 
 // database
 const { finder } = require('../handlers/mongoHandler.js');
@@ -57,7 +59,12 @@ module.exports = {
                 .addStringOption(option =>
                     option.setName('type')
                         .setDescription('Type of item (radical, kanji, or vocab).')
-                        .setRequired(false))
+                        .setRequired(false)
+                        .addChoices(
+                            { name: 'Radical', value: 'r' },
+                            { name: 'Kanji', value: 'k' },
+                            { name: 'Vocab', value: 'v' },
+                        ))
                 .addStringOption(option =>
                     option.setName('mnemonictype')
                         .setDescription('Type of mnemonic (reading, meaning, or both).')
@@ -86,7 +93,7 @@ module.exports = {
                 .setDescription('Show images submitted by yourself.')),
     async execute(interaction) {
         const sub = interaction.options.getSubcommand();
-        logger(namespace, `Show - '${sub}' Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Pending', new Date());
+        logger(logTag, `Show - '${sub}' Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Pending', new Date());
 
         // embeds
         const titles = {
@@ -108,7 +115,7 @@ module.exports = {
                 let k = parseInt(p * n);
                 return '█'.repeat(k) + '▁'.repeat(n-k);
             }
-            const dataquery = await errorAwait(namespace, async () => await finder({
+            const dataquery = await errorAwait(logTag, async () => await finder({
                 ...(type && { type: type }),
                 ...(level && { level: level }),
             }), [], 'Progress -', true);
@@ -145,13 +152,13 @@ module.exports = {
                 ...(level && { level: level }),
             }).then(subs => subs.map(item => item.submissions.filter(s => (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s}))).flat());
             if (submissions.length == 0) {
-                await changeEmbed(simpleEmbed(0x707070, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
+                await changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
                 return true;
             }
             var currentSub = 0;
             const updatePages = async (i, edit = false) => {
                 const sub = submissions[currentSub];
-                const embed = pagesEmbed(0x707070, 'Submissions - ' + (currentSub + 1) + ' out of ' + submissions.length, `Submitted on ${sub.date.toUTCString()} by ${sub.user[1]}. The image was uploaded [here](${sub.imagelink}).` + '\nFor more info on this item use `' + `/mnemonic name:${sub.char} type:${itemNames[sub.type]} level:${sub.level}` + '`.', [
+                const embed = pagesEmbed(embedColors.neutral, 'Submissions - ' + (currentSub + 1) + ' out of ' + submissions.length, `Submitted on ${sub.date.toUTCString()} by ${sub.user[1]}. ${sub.votes != 0 ? 'It has gathered ' + sub.votes + (sub.votes == 1 ? ' vote' : ' votes') + '. ' : ''}The image was uploaded [here](${sub.imagelink}).` + '\n' + itemInfo(sub.char, itemNames[sub.type], sub.level), [
                     ...((char || meaning || type || level || mnemonictype || user || accepted || source) ? [{ name: 'Parameters', value: '\u200B', inline: false }] : []),
                     ...(char ? [{ name: 'Char', value: char, inline: true }] : []),
                     ...(meaning ? [{ name: 'Meaning', value: meaning, inline: true }] : []),
@@ -190,9 +197,8 @@ module.exports = {
                 }
                 await updatePages(i);
             });
-            collector.on('end', collected => {
-                interaction.deleteReply();
-                logger(namespace, `Collector - ${collected.size} Button Press(es)`, 'Terminated');
+            collector.on('end', async collected => {
+                await errorAwait(logTag, async () => await interaction.deleteReply(), [], `Collector - Terminate with ${collected.size} Button Press(es)`);
             });
         }
         return true;

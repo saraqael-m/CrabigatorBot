@@ -1,5 +1,5 @@
 ﻿// console logging
-const namespace = 'Slash';
+const logTag = 'Slash';
 const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
@@ -7,7 +7,8 @@ const { SlashCommandBuilder } = require('@discordjs/builders');
 const { errorEmbed, pendingEmbed, simpleEmbed } = require('../helpers/embedder.js');
 
 // naming scheme
-const { itemNames, wkItemNames, wkItemColors } = require('../helpers/namer.js');
+const { itemNames, wkItemNames } = require('../helpers/namer.js');
+const { wkItemColors } = require('../helpers/styler.js');
 
 module.exports = {
     data: new SlashCommandBuilder()
@@ -32,7 +33,7 @@ module.exports = {
                 .setRequired(false)),
     async execute(interaction) {
         const { subjectData } = require('../handlers/wkapiHandler.js');
-        logger(namespace, `Mnemonic - Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Sent', new Date());
+        logger(logTag, `Mnemonic - Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Sent', new Date());
 
         const name = interaction.options.getString('name'),
             level = interaction.options.getInteger('level');
@@ -58,7 +59,7 @@ module.exports = {
             type = item.object[0].toLowerCase();
             embedInfo = itemNames[type] + ' ' + item.data.slug + ' (Level ' + item.data.level + ')';
             const content = ((items.length != 1 ? '(Randomly selected out of ' + items.length + ' items.)\n\n' : '') + '**Meaning Mnemonic:** ```' + item.data.meaning_mnemonic + '```' + (item.data.meaning_hint != undefined ? ('Hint: ```' + item.data.meaning_hint + '```') : '') + (item.data.reading_mnemonic != undefined ? '\n**Reading Mnemonic:** ```' + item.data.reading_mnemonic + '```' + (item.data.reading_hint != undefined ? ('Hint: ```' + item.data.reading_hint + '```') : '') : ''))
-                .replaceAll('<radical>', '*').replaceAll('</radical>', '*').replaceAll('<kanji>', '*').replaceAll('</kanji>', '*').replaceAll('<vocabulary>', '*').replaceAll('</vocabulary>', '*').replaceAll('<ja>', '').replaceAll('</ja>', '');
+                .replaceAll('<radical>', '*').replaceAll('</radical>', '*').replaceAll('<kanji>', '*').replaceAll('</kanji>', '*').replaceAll('<vocabulary>', '*').replaceAll('</vocabulary>', '*').replaceAll('<ja>', '').replaceAll('</ja>', '').replaceAll('<reading>', '').replaceAll('</reading>', '');
             var itemEmbed = simpleEmbed(wkItemColors[type], embedTitle + ' - ' + embedInfo, content)
                 .setURL(item.data.document_url)
                 .addFields(

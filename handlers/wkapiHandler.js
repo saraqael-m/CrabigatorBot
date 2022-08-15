@@ -1,5 +1,5 @@
 // console logging
-const namespace = 'WKAPI';
+const logTag = 'WKAPI';
 const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
@@ -37,9 +37,9 @@ const getData = async (path) => {
 }
 module.exports.wkapiStartup = async () => {
     // get subject data
-    const temp = await errorAwait(namespace, async () => await getData('subjects'), [], 'Retrieve - Subject Data', true);
+    const temp = await errorAwait(logTag, async () => await getData('subjects'), [], 'Retrieve - Subject Data', true);
     if (temp) { // if no error occured
         module.exports.subjectData = temp;
         module.exports.subjectsUpdated = true;
-    } else logger(namespace, 'Fallback - Subject JSON', 'Used', subjectDataJSONPath);
+    } else logger(logTag, 'Fallback - Subject JSON', 'Used', subjectDataJSONPath);
 }

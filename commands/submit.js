@@ -1,16 +1,17 @@
 ﻿// console logging
-const namespace = 'Slash';
+const logTag = 'Slash';
 const { logger, errorAwait } = require('../helpers/logger.js');
 
 // requires
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { submitEmbed, pendingEmbed, errorEmbed } = require('../helpers/embedder.js');
+const { itemInfo } = require('../helpers/messager.js');
 
 // database
 const { append, update, finder } = require('../handlers/mongoHandler.js');
 
 // image uploading
-const { uploadImageFromUrl, folderNames, getItemDir } = require('../handlers/bunnyHandler.js');
+const { uploadImageFromUrl, folderNames } = require('../handlers/bunnyHandler.js');
 const imageNaming = (wkid, itype, mtype, subid, name) => encodeURI(`${wkid}_${itype}${mtype}${subid}_${name}-${new Date().toISOString().match(/[a-zA-Z0-9]/g).join('')}`);
 
 // naming schemes
@@ -109,26 +110,26 @@ module.exports = {
         await interaction.reply({ embeds: [pendingEmbed(embedTitle, '[#--] Searching for the item...', embedInfo)] });
 
         // main submission code
-        logger(namespace, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
+        logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
         const getMeanings = e => e.map(e => e.meaning.toLowerCase());
         const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.slug == meaning || e.data.characters == char || getMeanings(e.data.meanings).includes(meaning.toLowerCase()))));
         var newSubmission, submissionPlace;
         if (item == undefined) {
-            logger(namespace, `Submit - 1/3 Find Item`, 'Failed');
+            logger(logTag, `Submit - 1/3 Find Item`, 'Failed');
             await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the requested item could not be found!', embedInfo));
             return false;
         } else {
-            logger(namespace, `Submit - 1/3 Find Item`, 'Success');
+            logger(logTag, `Submit - 1/3 Find Item`, 'Success');
             await changeEmbed(pendingEmbed(embedTitle, '[##-] Uploading the image...', embedInfo));
 
             const condition = { wkId: item.id };
             let dbEntry = await finder(condition);
-            if (dbEntry.length > 1) logger(namespace, 'WARNING: Multiple database entries for same query found.');
+            if (dbEntry.length > 1) logger(logTag, 'WARNING: Multiple database entries for same query found.');
             dbEntry = dbEntry[0];
             submissionPlace = dbEntry != undefined ? dbEntry.submissions.length + 1 : 1;
-            const links = await errorAwait(namespace, async (a, b) => await uploadImageFromUrl(a, b, 400), [image.url, folderNames[type] + '/' + imageNaming(item.id, type, mnemonictype, submissionPlace, item.data.characters != null ? item.data.characters : item.data.slug)], 'Submit - 2/3 Upload Image', true);
+            const links = await errorAwait(logTag, async (a, b) => await uploadImageFromUrl(a, b, 512), [image.url, folderNames[type] + '/' + imageNaming(item.id, type, mnemonictype, submissionPlace, item.data.characters != null ? item.data.characters : item.data.slug)], 'Submit - 2/3 Upload Image', true);
             if (!links || !links[0]) {
-                logger(namespace, 'Submit - 2/3 Upload Image', 'Failed');
+                logger(logTag, 'Submit - 2/3 Upload Image', 'Failed');
                 await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the image could not be uploaded!', embedInfo));
                 return false;
             } else await changeEmbed(pendingEmbed(embedTitle, '[###] Saving submission to the database...', embedInfo));
@@ -141,7 +142,7 @@ module.exports = {
                 "user": otheruser != null ? [null, otheruser] : (user != null ? [user.id, user.username + "#" + user.discriminator] : [null, null]),
                 "imagelink": imagelink,
                 "thumblink": thumblink,
-                "mnemonictype": mnemonictype,
+                "mnemonictype": type == 'r' ? 'm' : mnemonictype,
                 "source": source,
                 "prompt": prompt,
                 "remarks": remarks != null ? remarks : "",
@@ -163,16 +164,16 @@ module.exports = {
                 func = async () => await append(dbEntry);
             }
             if (!(await func())) {
-                logger(namespace, 'Submit - 3/3 Save To Database', 'Failed');
+                logger(logTag, 'Submit - 3/3 Save To Database', 'Failed');
                 await changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!', embedInfo));
                 return false;
             }
-            logger(namespace, 'Submit - 3/3 Save To Database', 'Success');
+            logger(logTag, 'Submit - 3/3 Save To Database', 'Success');
         }
-        logger(namespace, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Success', new Date());
+        logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Success', new Date());
 
         // final response
-        const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n**Item:**\n${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})\nFor more info on this item use ${'`'}/mnemonic name:${item.data.slug} type:${itemNames[type]} level:${item.data.level}${'`'}.\n\n**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
+        const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n**Item:**\n${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
         await changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
         return true;
     }
