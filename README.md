@@ -1,2 +1,2 @@
 # CrabigatorBot
-Discord bot made for the WaniKani AI Mnemonic project.
+Discord bot made for the unofficial WaniKani Image Mnemonics project.
