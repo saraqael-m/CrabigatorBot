@@ -5,6 +5,7 @@ const { mongoStartup, mongoShutdown, finder, update } = require('./handlers/mong
 const { wkapiStartup } = require('./handlers/wkapiHandler.js'); // for startup
 const fs = require('fs'),
     path = require('path');
+const { imageAcceptUpload } = require('./commands/submit.js');
 const { logger, loggerSetClient } = require('./helpers/logger.js'),
     { voterSetClient, createElection, electionShutdown } = require('./itemVotes.js');
 const logTag = 'Main';
@@ -120,6 +121,7 @@ client.on('messageCreate', async msg => {
                     const changed = isUnaccept ? [] : item.submissions.filter((s, i) => (s.subId != subId) && (s.accepted != Object.values(updateArray)[i])).map(s => s.subId);
                     logger(logTag, name + ' -', 'Success');
                     await replyMsg(name + `ed submission ${subId} for item ${wkId}.` + (changed.length != 0 ? (changed.length != 1 ? ` Submissions ${changed.join(', ')} were reverted.` : ` Submission ${changed.join(', ')} was unaccepted.`) : ''));
+                    if (!isUnaccept) await imageAcceptUpload(currentSub.imagelink, wkId, item.type, currentSub.mnemonictype);
                     return true;
                 } else {
                     logger(logTag, name + ' - Database Update', 'Failed');

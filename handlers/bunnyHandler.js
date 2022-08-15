@@ -73,6 +73,17 @@ module.exports = {
     async getImageByName(name) {
         return bunnyUrl(name);
     },
+    async purgeUrl(path) {
+        const url = bunnyUrl(path); // full url
+        return await errorAwait(logTag, async url => {
+            axios.request({
+                method: 'GET',
+                url: url,
+                headers: { Accept: 'application/json', AccessKey: bunnyToken }
+            }).then((response) => response.status)
+                .catch((error) => console.error(error));
+        }, [url], 'Purger -', true);
+    },
     async getImageByIdSub(id, subnum) {
         // wanikani id and submission number
         for (const folder of Object.values(module.exports.folderNames).map(e => e + '/')) {

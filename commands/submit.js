@@ -11,7 +11,7 @@ const { itemInfo } = require('../helpers/messager.js');
 const { append, update, finder } = require('../handlers/mongoHandler.js');
 
 // image uploading
-const { uploadImageFromUrl, folderNames } = require('../handlers/bunnyHandler.js');
+const { uploadImageFromUrl, deleteImage, folderNames, purgeUrl } = require('../handlers/bunnyHandler.js');
 const imageNaming = (wkid, itype, mtype, subid, name) => encodeURI(`${wkid}_${itype}${mtype}${subid}_${name}-${new Date().toISOString().match(/[a-zA-Z0-9]/g).join('')}`);
 
 // naming schemes
@@ -136,13 +136,14 @@ module.exports = {
             const [imagelink, thumblink] = links;
             var subId = submissionPlace;
             if (dbEntry) while (dbEntry.submissions.find(s => s.subId == subId)) subId--;
+            const newMnemonictype = type == 'r' ? 'm' : mnemonictype;
             newSubmission = {
                 "subId": subId,
                 "date": new Date(),
                 "user": otheruser != null ? [null, otheruser] : (user != null ? [user.id, user.username + "#" + user.discriminator] : [null, null]),
                 "imagelink": imagelink,
                 "thumblink": thumblink,
-                "mnemonictype": type == 'r' ? 'm' : mnemonictype,
+                "mnemonictype": newMnemonictype,
                 "source": source,
                 "prompt": prompt,
                 "remarks": remarks != null ? remarks : "",
@@ -152,6 +153,7 @@ module.exports = {
             let func;
             if (dbEntry != undefined) {
                 func = async () => await update(condition, { $push: { submissions: newSubmission } });
+                if (submissionPlace == 1 || (newMnemonictype != 'b' && !dbEntry.submissions.find(s => newMnemonictype == s.mnemonictype))) await module.exports.imageAcceptUpload(imagelink, item.id, type, newMnemonictype);
             } else {
                 dbEntry = {
                     "wkId": item.id,
@@ -162,6 +164,7 @@ module.exports = {
                     "submissions": [newSubmission],
                 }
                 func = async () => await append(dbEntry);
+                await module.exports.imageAcceptUpload(imagelink, item.id, type, newMnemonictype);
             }
             if (!(await func())) {
                 logger(logTag, 'Submit - 3/3 Save To Database', 'Failed');
@@ -176,5 +179,20 @@ module.exports = {
         const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n**Item:**\n${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
         await changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
         return true;
+    },
+    async imageAcceptUpload(url, wkId, itemtype, mnemonictype) {
+        const types = mnemonictype == 'b' ? ['r', 'm'] : [mnemonictype];
+        const typeNames = {
+            r: 'Reading',
+            m: 'Meaning',
+        }
+        for (const type of types) {
+            console.log(url);
+            const path = folderNames[itemtype] + '/' + typeNames[type] + '/' + wkId;
+            const deleted = await deleteImage(path + '.png');
+            if (deleted) await purgeUrl(path + '.png');
+            logger(logTag, 'Accept - Delete Image', 'Sent', !deleted ? 'Nothing to delete' : 'Deleted');
+            logger(logTag, 'Accept - Upload Image', 'Sent', await uploadImageFromUrl(url, path));
+        }
     }
 };
