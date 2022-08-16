@@ -10,5 +10,6 @@ module.exports = {
         error: 0xe83427,
         neutral: 0x707070,
         about: 0xeb7a34,
+        winner: 0xffd700,
     }
 }

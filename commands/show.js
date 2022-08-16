@@ -13,6 +13,7 @@ const { finder } = require('../handlers/mongoHandler.js');
 
 // parameters
 const progressbarWidth = 25;
+const activeTime = 600000;
 
 // naming schemes
 const { itemNames, mnemonicNames } = require('../helpers/namer.js');
@@ -147,10 +148,10 @@ module.exports = {
                 source = onlyUser ? null : interaction.options.getString('source');
             const submissions = await finder({
                 ...(char && { char: char }),
-                ...(meaning && { meaning: { $regex: meaning } }),
+                ...(meaning && { meaning: { $regex: meaning, $options: 'i' } }),
                 ...(type && { type: type }),
                 ...(level && { level: level }),
-            }).then(subs => subs.map(item => item.submissions.filter(s => (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s}))).flat());
+            }).then(subs => subs.map(item => item.submissions.filter(s => s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s}))).flat());
             if (submissions.length == 0) {
                 await changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
                 return true;
@@ -185,7 +186,7 @@ module.exports = {
             updatePages(interaction, true);
 
             if (prevCollector != undefined) await prevCollector.stop(); // delete old message
-            const collector = interaction.channel.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: 300000 }); // 5 minutes
+            const collector = interaction.channel.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: activeTime }); // 5 minutes
             prevCollector = collector;
             collector.on('collect', async i => {
                 switch (i.customId) {
