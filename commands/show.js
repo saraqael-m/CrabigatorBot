@@ -105,7 +105,7 @@ module.exports = {
         const embedTitle = titles[sub];
         const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
-        await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
+        const msg = await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
 
         if (sub == 'progress') {
             const subjectData = require('../handlers/wkapiHandler.js').subjectData;
@@ -185,9 +185,7 @@ module.exports = {
             }
             updatePages(interaction, true);
 
-            if (prevCollector != undefined) await prevCollector.stop(); // delete old message
-            const collector = interaction.channel.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: activeTime }); // 5 minutes
-            prevCollector = collector;
+            const collector = msg.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: activeTime }); // 5 minutes
             collector.on('collect', async i => {
                 switch (i.customId) {
                     case 'fullLeft': currentSub = 0; break;
