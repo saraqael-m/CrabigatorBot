@@ -154,7 +154,8 @@ module.exports = {
                 ...(meaning && { meaning: { $regex: meaning, $options: 'i' } }),
                 ...(type && { type: type }),
                 ...(level && { level: level }),
-            }).then(subs => subs.map(item => item.submissions.filter(s => subid != null ? (subid == s.subId) : (s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s})))).flat());
+            }).then(subs => subs.map(item => item.submissions.filter(s => subid != null ? (subid == s.subId) : (s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)))
+                .map(s => ({ char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s }))).flat());
             if (submissions.length == 0) {
                 await changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
                 return true;

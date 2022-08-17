@@ -141,7 +141,7 @@ module.exports = {
                 const duplicates = dbEntry.submissions.filter(s => s.md5imghash == hash);
                 if (duplicates.length > 0) {
                     await changeEmbed(errorEmbed(embedTitle, `This image seems to be a duplicate of submission ${duplicates.map(d => d.subId).join(', ')}.\n`
-                        + `To see that submission use ${'`'}/show submissions char:${dbEntry.char} type:${itemNames[dbEntry.type]} subid:${duplicates[0].subId}${'`'}.`
+                        + `To see that submission use ${'`'}/show submissions char:${dbEntry.char} type:${itemNames[dbEntry.type]} subid:${duplicates[0].subId}${'`'}.\n\n`
                         + 'If you think this is incorrect or you wanted to change your submission *please contact a staff member*.', embedInfo));
                     logger(logTag, 'Submit - 2/3 Upload Image (Duplicate)', 'Failed');
                     return false;
