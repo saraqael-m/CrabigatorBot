@@ -2,7 +2,7 @@
 const logTag = 'Voter';
 const { logger, errorAwait } = require('./helpers/logger.js');
 
-const { discord: { clientId, channelIds: { voteChannelIds: { radVoteId, kanVoteId, vocVoteId } } } } = require('../tokens.json');
+const { discord: { clientId, channelIds: { voteChannelIds: { radVoteId, kanVoteId, vocVoteId, voteInfoId } } } } = require('../tokens.json');
 const { finder, update } = require('./handlers/mongoHandler.js');
 const { emotes, stringEmotes, subInfo } = require('./helpers/messager.js'),
     { embedBuilder, simpleEmbed } = require('./helpers/embedder.js'),
@@ -25,6 +25,7 @@ module.exports = {
             r: await client.channels.fetch(radVoteId),
             k: await client.channels.fetch(kanVoteId),
             v: await client.channels.fetch(vocVoteId),
+            info: await client.channels.fetch(voteInfoId),
         };
         for (const [type, channel] of Object.entries(voteChannels)) {
             const messages = await channel.messages.fetch({ limit: 99 }).then(e => e.filter(m => m.author.id == clientId));
@@ -115,28 +116,46 @@ module.exports = {
                 ...randomPair.map((e, i) => embedBuilder().setTitle(voteEmotes[i]).setDescription(`Previous votes: ${e.votes}`).setImage(e.thumblink).setFooter({ text: `ID ${itemId}/${e.subId}` }))
             ]
         });
+        var votedUsers = db.find(e => e.wkId == itemId).uservotes || {};
+        const collector = votingMsg.createReactionCollector({ filter: (i, user) => user.id != clientId && voteEmotes.includes(i.emoji.name), time: electionTime + 2000 });
+        collector.on('collect', (e, user) => { // check if user has already voted
+            const currentVotes = votedUsers[user.id],
+                currentMnemonictype = randomPair[voteEmotes.findIndex(v => v == e.emoji.name)].mnemonictype,
+                currentSubId = randomPair[voteEmotes.findIndex(v => v == e.emoji.name)].subId;
+            if (currentVotes) {
+                const previousSubId = currentVotes[currentMnemonictype];
+                if (previousSubId) {
+                    if (previousSubId == currentSubId) voteChannels.info.send({ content: `<@${user.id}>: You have already voted for this submission!` })
+                    else voteChannels.info.send({ content: `<@${user.id}>: You changed your vote for this item from submission ${previousSubId} to ${currentSubId}.` });
+                }
+            } else votedUsers[user.id] = { m: undefined, r: undefined, b: undefined };
+            votedUsers[user.id][currentMnemonictype] = currentSubId;
+        });
         messages.push(votingMsg);
         await stringEmotes(votingMsg, voteEmotes); // add emotes
-        new Promise(res => setTimeout(res, electionTime)).then(async () => await module.exports.deleteMessages(type));
         prevCollectors[type] = {
             async stop() { // delete messages, update database, and send winner msg
-                const emoteAmounts = Array.from(votingMsg.reactions.cache).map(e => [e[0], e[1].count]); // get reaction amounts from voting message
-                const collectedVotes = voteEmotes.map(v => emoteAmounts.find(e => e[0] == v)[1] - 1); // turn them into collected votes array
-                const dbItem = db.find(e => e.wkId == itemId);
+                //const emoteAmounts = Array.from(votingMsg.reactions.cache).map(e => [e[0], e[1].count]); // get reaction amounts from voting message
+                //const collectedVotes = voteEmotes.map(v => emoteAmounts.find(e => e[0] == v)[1] - 1); // turn them into collected votes array
+                try { collector.stop(); } catch (e) { console.log(e); } // stop the collector
+                const totalVotes = randomPair.map(s => Object.values(votedUsers).length == 1 ? (Object.values(Object.values(votedUsers)[0]).includes(s.subId) ? 1 : 0) : Object.values(votedUsers).reduce((p, c, i) => (i > 1 ? p : (Object.values(p).includes(s.subId) ? 1 : 0)) + (Object.values(c).includes(s.subId) ? 1 : 0), 0));
+                const dbItem = await finder({ wkId: itemId }).then(i => i[0]);
                 await update({ wkId: itemId },
                     {
-                        $inc: Object.fromEntries(randomPair.map((s, i) => {
-                            const foundIndex = dbItem.submissions.findIndex(e => e.subId == s.subId);
-                            return foundIndex != -1 ? [`submissions.${foundIndex}.votes`, collectedVotes[i]] : false;
-                        }).filter(e => e))
+                        $set: {
+                            uservotes: votedUsers,
+                            ...Object.fromEntries(randomPair.map((s, i) => {
+                                const foundIndex = dbItem.submissions.findIndex(e => e.subId == s.subId);
+                                return foundIndex != -1 ? [`submissions.${foundIndex}.votes`, totalVotes[i]] : false;
+                            }).filter(e => e))
+                        }
                     },
-                    { upsert: false })
+                    { upsert: false });
                 for (const m of messages) { // delete messages
                     await errorAwait(logTag, async () => await m.delete(), [], `Collector ${type} - Delete Message`);
                 }
-                prevCollectors[type] = undefined;
                 if (module.exports.active) { // winner message
-                    const totalVotes = collectedVotes.map((e, i) => e + randomPair[i].votes);
+                    const collectedVotes = totalVotes.map((e, i) => e - randomPair[i].votes);
                     const winnerIndex = totalVotes.findIndex(v => v >= Math.max(...totalVotes));
                     const winnerMsg = await channel.send({
                         embeds: [
@@ -158,12 +177,18 @@ module.exports = {
                 }
             }
         };
+        new Promise(res => setTimeout(res, electionTime)).then(async () => await module.exports.deleteMessages(type));
     },
     async deleteMessages(type) {
-        if (prevCollectors[type] != undefined) try {
-            await prevCollectors[type].stop(); // delete election messages
-        } catch (e) { // if it doesn't work it's a message
-            await errorAwait(logTag, async () => await prevCollectors[type].delete(), [], `Collector ${type} - Delete Message`);
+        if (prevCollectors[type] != undefined) {
+            const current = prevCollectors[type];
+            prevCollectors[type] = undefined;
+            try {
+                await current.stop(); // delete election messages
+            } catch (e) { // if it doesn't work it's a message
+                console.log(e);
+                await errorAwait(logTag, async () => await current.delete(), [], `Collector ${type} - Delete Message`);
+            }
         }
     },
     async electionShutdown() {

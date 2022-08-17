@@ -148,6 +148,7 @@ client.on('messageCreate', async msg => {
             return true;
         } else await replyMsg('Could not parse argument.');
     } else if (command == 'elect') {
+        logger(logTag, 'Elect -', 'Pending');
         if (msg.member.roles.cache.some(role => role.id === staffId)) {
             const type = args[0],
                 pair = JSON.parse(args.slice(1).join(' '));
@@ -155,6 +156,7 @@ client.on('messageCreate', async msg => {
             await stringEmotes(msg, 'OKAY');
         } else await stringEmotes(msg, 'NO');
     } else if (command == 'delete') {
+        logger(logTag, 'Delete -', 'Pending');
         if (msg.member.roles.cache.some(role => role.id === staffId)) {
             const wkId = parseInt(args[0]),
                 subId = parseInt(args[1]);

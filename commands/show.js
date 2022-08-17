@@ -185,7 +185,7 @@ module.exports = {
             }
             updatePages(interaction, true);
 
-            const collector = msg.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: activeTime }); // 5 minutes
+            const collector = msg.createMessageComponentCollector({ filter: i => ['fullLeft', 'left', 'random', 'right', 'fullRight'].includes(i.customId), time: activeTime });
             collector.on('collect', async i => {
                 switch (i.customId) {
                     case 'fullLeft': currentSub = 0; break;

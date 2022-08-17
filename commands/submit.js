@@ -6,16 +6,23 @@ const { logger, errorAwait } = require('../helpers/logger.js');
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { submitEmbed, pendingEmbed, errorEmbed } = require('../helpers/embedder.js');
 const { itemInfo } = require('../helpers/messager.js');
+const { md5EncryptHex } = require('../helpers/misc.js');
+const axios = require('axios');
 
 // database
 const { append, update, finder } = require('../handlers/mongoHandler.js');
 
 // image uploading
-const { uploadImageFromUrl, deleteImage, folderNames, purgeUrl } = require('../handlers/bunnyHandler.js');
+const { uploadImage, deleteImage, folderNames, purgeUrl } = require('../handlers/bunnyHandler.js');
 const imageNaming = (wkid, itype, mtype, subid, name) => encodeURI(`${wkid}_${itype}${mtype}${subid}_${name}-${new Date().toISOString().match(/[a-zA-Z0-9]/g).join('')}`);
 
 // naming schemes
 const { itemNames, mnemonicNames } = require('../helpers/namer.js');
+
+const getBuffer = async url => await errorAwait(logTag, async url => {
+        const response = await axios.get(url, { responseType: 'arraybuffer' });
+        return Buffer.from(response.data, 'utf-8');
+    }, [url], `Buffer - From Url`, true);
 
 // main
 module.exports = {
@@ -26,10 +33,10 @@ module.exports = {
             option.setName('char')
                 .setDescription('Characters of the item (e.g. "大", "大人", or for radicals the meaning "barb").')
                 .setRequired(true))
-        .addStringOption(option =>
+        /*.addStringOption(option =>
                     option.setName('meaning')
                         .setDescription('Meaning of the item (e.g. "big", "adult", or for radicals the meaning "barb" again).')
-                        .setRequired(true))
+                        .setRequired(true))*/
         .addStringOption(option =>
             option.setName('type')
                 .setDescription('Type of the item (radical, kanji, or vocab).')
@@ -90,7 +97,7 @@ module.exports = {
 
         // get values
         const char = interaction.options.getString('char'),
-            meaning = interaction.options.getString('meaning'),
+            //meaning = interaction.options.getString('meaning'),
             type = interaction.options.getString('type'),
             source = interaction.options.getString('source'),
             prompt = interaction.options.getString('prompt'),
@@ -111,8 +118,9 @@ module.exports = {
 
         // main submission code
         logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
-        const getMeanings = e => e.map(e => e.meaning.toLowerCase());
-        const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.slug == meaning || e.data.characters == char || getMeanings(e.data.meanings).includes(meaning.toLowerCase()))));
+        //const getMeanings = e => e.map(e => e.meaning.toLowerCase());
+        //const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.slug == meaning || e.data.characters == char || getMeanings(e.data.meanings).includes(meaning.toLowerCase()))));
+        const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && e.data.slug == char);
         var newSubmission, submissionPlace;
         if (item == undefined) {
             logger(logTag, `Submit - 1/3 Find Item`, 'Failed');
@@ -127,15 +135,26 @@ module.exports = {
             if (dbEntry.length > 1) logger(logTag, 'WARNING: Multiple database entries for same query found.');
             dbEntry = dbEntry[0];
             submissionPlace = dbEntry != undefined ? dbEntry.submissions.length + 1 : 1;
-            const links = await errorAwait(logTag, async (a, b) => await uploadImageFromUrl(a, b, 512), [image.url, folderNames[type] + '/' + imageNaming(item.id, type, mnemonictype, submissionPlace, item.data.characters != null ? item.data.characters : item.data.slug)], 'Submit - 2/3 Upload Image', true);
+            const buffer = await getBuffer(image.url);
+            const hash = md5EncryptHex(buffer);
+            if (dbEntry) { // hash, search for duplicates
+                const duplicates = dbEntry.submissions.filter(s => s.md5imghash == hash);
+                if (duplicates.length > 0) {
+                    await changeEmbed(errorEmbed(embedTitle, `This image seems to be a duplicate of submission ${duplicates.map(d => d.subId).join(', ')}.\n`
+                        + 'If you think this is incorrect or you wanted to change your submission *please contact a staff member*.', embedInfo));
+                    logger(logTag, 'Submit - 2/3 Upload Image (Duplicate)', 'Failed');
+                    return false;
+                }
+            }
+            const links = await errorAwait(logTag, async path => await uploadImage(buffer, path, 512), [folderNames[type] + '/' + imageNaming(item.id, type, mnemonictype, submissionPlace, item.data.characters != null ? item.data.characters : item.data.slug)], 'Submit - 2/3 Upload Image', true);
             if (!links || !links[0]) {
                 logger(logTag, 'Submit - 2/3 Upload Image', 'Failed');
                 await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the image could not be uploaded!', embedInfo));
                 return false;
             } else await changeEmbed(pendingEmbed(embedTitle, '[###] Saving submission to the database...', embedInfo));
             const [imagelink, thumblink] = links;
-            var subId = submissionPlace;
-            if (dbEntry) while (dbEntry.submissions.find(s => s.subId == subId)) subId--;
+            var subId = dbEntry ? Math.max(...dbEntry.submissions.map(e => e.subId)) + 1 : 1;
+            if (dbEntry) while (dbEntry.submissions.find(s => s.subId == subId)) subId++;
             const newMnemonictype = type == 'r' ? 'm' : mnemonictype;
             newSubmission = {
                 "subId": subId,
@@ -143,6 +162,7 @@ module.exports = {
                 "user": otheruser != null ? [null, otheruser] : (user != null ? [user.id, user.username + "#" + user.discriminator] : [null, null]),
                 "imagelink": imagelink,
                 "thumblink": thumblink,
+                "md5imghash": hash,
                 "mnemonictype": newMnemonictype,
                 "source": source,
                 "prompt": prompt,
@@ -187,12 +207,22 @@ module.exports = {
             m: 'Meaning',
         }
         for (const type of types) {
-            console.log(url);
             const path = folderNames[itemtype] + '/' + typeNames[type] + '/' + wkId;
             const deleted = await deleteImage(path + '.png');
             if (deleted) await purgeUrl(path + '.png');
             logger(logTag, 'Accept - Delete Image', 'Sent', !deleted ? 'Nothing to delete' : 'Deleted');
-            logger(logTag, 'Accept - Upload Image', 'Sent', await uploadImageFromUrl(url, path));
+            logger(logTag, 'Accept - Upload Image', 'Sent', await uploadImage(await getBuffer(url), path));
+        }
+    },
+    async updateHashes() {
+        //await require('../handlers/mongoHandler.js').mongoStartup();
+        logger(logTag, 'Hash - Update All', 'Sent');
+        const db = await finder({});
+        for (const item of db) {
+            const updateArray = Object.fromEntries(await Promise.all(item.submissions.map(sub => sub.imagelink ? getBuffer(sub.imagelink) : false))
+                .then(async buffers => buffers.map((b, i) => b ? [`submissions.${i}.md5imghash`, md5EncryptHex(b)] : false).filter(i => i)));
+            console.log(updateArray);
+            await update({ wkId: item.wkId }, { $set: updateArray });
         }
     }
 };

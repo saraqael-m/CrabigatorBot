@@ -20,16 +20,11 @@ const getItemDir = async path => {
 }
 
 module.exports = {
-    async uploadImageFromUrl(url, name, thumbSize = false) {
-        const totalSteps = thumbSize ? 5 : 3;
+    async uploadImage(buffer, name, thumbSize = false) {
+        const totalSteps = thumbSize ? 4 : 2;
         var step = 1;
-        return await errorAwait(logTag, async url => {
-            const response = await axios.get(url, { responseType: 'arraybuffer' });
-            return Buffer.from(response.data, 'utf-8');
-        }, [url], `Upload - ${step}/${totalSteps} Get Buffer`, true)
-            .then(async buffer => {
+        return await (async () => {
                 if (!buffer) return [];
-                step++;
                 var promiseArray = [
                     new Promise(async (resolve, reject) => await errorAwait(logTag, async () => await jimp.read(buffer, async (err, image) => {
                         if (err) { console.error(err); reject(false); };
@@ -45,7 +40,7 @@ module.exports = {
                     }), [], `Upload - ${step}/${totalSteps} Convert Image`, true))] : []),
                 ]
                 return await Promise.all(promiseArray);
-            })
+            })()
             .then(async images => {
                 if (!images[0]) return [];
                 step += thumbSize ? 2 : 1;
