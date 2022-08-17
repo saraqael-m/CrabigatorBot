@@ -163,11 +163,12 @@ module.exports = {
                                 `The winner of this voting was decided:\n**Submission ${voteEmotes[winnerIndex]} won!**\n\n*The next voting will start shortly (max. ${(winnerTime/1000).toFixed(0)} seconds).*`)
                                 .addFields(...randomPair.map((_, i) => [ // display vote info
                                     { name: '\u200B', value: voteEmotes[i], inline: false },
-                                    { name: 'Collected', value: collectedVotes[i].toString(), inline: true },
-                                    { name: 'Previous', value: randomPair[i].votes.toString(), inline: true },
-                                    { name: 'Total', value: totalVotes[i].toString(), inline: true },
+                                    { name: 'New Votes', value: collectedVotes[i].toString(), inline: true },
+                                    { name: 'Previous Votes', value: randomPair[i].votes.toString(), inline: true },
+                                    { name: 'Total Votes', value: totalVotes[i].toString(), inline: true },
                                 ]).flat(),
-                                ).setImage(randomPair[winnerIndex].thumblink)
+                            ).setImage(randomPair[winnerIndex].thumblink)
+                                .setFooter({ text: '*New Votes* are the votes that a submission acquired in this voting. *Previous Votes* are the ones from previous votings. And, *Total Votes* are the total number of votes for that submission.' })
                         ]
                     });
                     new Promise(res => setTimeout(res, winnerTime)).then(async () => {

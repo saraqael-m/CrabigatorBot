@@ -18,8 +18,6 @@ const activeTime = 600000;
 // naming schemes
 const { itemNames, mnemonicNames } = require('../helpers/namer.js');
 
-var prevCollector;
-
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('show')
@@ -87,7 +85,11 @@ module.exports = {
                             { name: 'DALL-E 2', value: 'dall-e_2' },
                             { name: 'Other AI (Commercial)', value: 'commercial' },
                             { name: 'Other AI (Personal)', value: 'personal' },
-                            { name: 'Own Drawing', value: 'drawing' })))
+                            { name: 'Own Drawing', value: 'drawing' }))
+                .addIntegerOption(option =>
+                    option.setName('subid')
+                        .setDescription('The submission ID.')
+                        .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
                 .setName('mysubmissions')
@@ -145,13 +147,14 @@ module.exports = {
                 mnemonictype = onlyUser ? null : interaction.options.getString('mnemonictype'),
                 user = onlyUser ? interaction.user : interaction.options.getUser('user'),
                 accepted = onlyUser ? null : interaction.options.getBoolean('accepted'),
-                source = onlyUser ? null : interaction.options.getString('source');
+                source = onlyUser ? null : interaction.options.getString('source'),
+                subid = onlyUser ? null : interaction.options.getInteger('subid');
             const submissions = await finder({
                 ...(char && { char: char }),
                 ...(meaning && { meaning: { $regex: meaning, $options: 'i' } }),
                 ...(type && { type: type }),
                 ...(level && { level: level }),
-            }).then(subs => subs.map(item => item.submissions.filter(s => s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s}))).flat());
+            }).then(subs => subs.map(item => item.submissions.filter(s => subid != null ? (subid == s.subId) : (s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)).map(s => ({char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s})))).flat());
             if (submissions.length == 0) {
                 await changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
                 return true;
