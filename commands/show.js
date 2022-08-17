@@ -126,7 +126,7 @@ module.exports = {
                 await changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!'));
                 return false;
             }
-            const itemsFinished = dataquery.length,
+            const itemsFinished = dataquery.filter(e => e.submissions.length > 0).length,
                 itemsTotal = subjectData.filter(e => (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
                 submissionAmount = dataquery.map(e => e.submissions.length).reduce((p, c) => p + c, 0);
             const percentage = itemsFinished / itemsTotal;

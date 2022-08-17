@@ -138,7 +138,7 @@ module.exports = {
                 //const emoteAmounts = Array.from(votingMsg.reactions.cache).map(e => [e[0], e[1].count]); // get reaction amounts from voting message
                 //const collectedVotes = voteEmotes.map(v => emoteAmounts.find(e => e[0] == v)[1] - 1); // turn them into collected votes array
                 try { collector.stop(); } catch (e) { console.log(e); } // stop the collector
-                const totalVotes = randomPair.map(s => Object.values(votedUsers).length == 1 ? (Object.values(Object.values(votedUsers)[0]).includes(s.subId) ? 1 : 0) : Object.values(votedUsers).reduce((p, c, i) => (i > 1 ? p : (Object.values(p).includes(s.subId) ? 1 : 0)) + (Object.values(c).includes(s.subId) ? 1 : 0), 0));
+                const totalVotes = randomPair.map(s => Object.values(votedUsers).length == 1 ? (Object.values(Object.values(votedUsers)[0]).includes(s.subId) ? 1 : 0) : Object.values(votedUsers).map(u => Object.values(u).includes(s.subId) ? 1 : 0).reduce((p, c) => p + c, 0));
                 const dbItem = await finder({ wkId: itemId }).then(i => i[0]);
                 await update({ wkId: itemId },
                     {
