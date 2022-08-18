@@ -13,7 +13,7 @@ const { subjectData } = require('./handlers/wkapiHandler.js');
 
 var client, voteChannels, prevCollectors = {}, insertVoting = {};
 
-const electionTime = 10000//600000;
+const electionTime = 600000;
 const winnerTime = 30000;
 
 module.exports = {

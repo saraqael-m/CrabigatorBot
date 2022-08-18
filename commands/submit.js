@@ -197,7 +197,10 @@ module.exports = {
         logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Success', new Date());
 
         // final response
-        const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n**Item:**\n${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\nThe prompt was "${newSubmission.prompt}"${newSubmission.remarks != '' ? ' with a remark of "' + newSubmission.remarks + '"' : ''}.\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
+        const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n`
+            + `**Item:**\n${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n`
+            + `**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\n`
+            + `Prompt:${('\n' + newSubmission.prompt).replaceAll('\n', '\n> ')}${newSubmission.remarks != '' ? '\nRemark:' + ('\n' + newSubmission.remarks).replaceAll('\n', '\n> ') : ''}\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
         await changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
         return true;
     },

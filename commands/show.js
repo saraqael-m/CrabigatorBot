@@ -155,7 +155,7 @@ module.exports = {
                 ...(type && { type: type }),
                 ...(level && { level: level }),
             }).then(subs => subs.map(item => item.submissions.filter(s => subid != null ? (subid == s.subId) : (s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)))
-                .map(s => ({ char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s }))).flat());
+                .map(s => ({ char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s }))).flat().sort((a, b) => b.date - a.date)); // newest to oldest
             if (submissions.length == 0) {
                 await changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
                 return true;
