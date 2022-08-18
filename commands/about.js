@@ -19,7 +19,7 @@ module.exports = {
         await interaction.reply({
             embeds: [
                 simpleEmbed(embedColors.about, 'About', '**Image Mnemonics Project**\n'
-                    + 'This is a project started by a WaniKani user in this[thread](https://community.wanikani.com/t/wanikani-mnemonics-in-image-form-done-by-ai/57910).\n'
+                    + 'This is a project started by a WaniKani user in this [thread](https://community.wanikani.com/t/wanikani-mnemonics-in-image-form-done-by-ai/57910).\n'
                     + 'Its goal is to turn the mnemonics for the reading and meaning of Japanese words and kanji into an image form. '
                     + 'This will generally be done by feeding an AI a prompt and getting an image back. But other ways, such as drawing, are fair game as well! '
                     + 'These images are then seen on the WaniKani website by anyone using the dedicated userscript. (*Disclaimer:* This is not an official project by WaniKani.)\n'

@@ -93,7 +93,7 @@ client.on('messageCreate', async msg => {
             logger(logTag, 'The Crabigator is not here anymore :(\n');
             await stringEmotes(msg, ['BB', 'Y', 'E']);
             (await client.channels.fetch(announceId)).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
-            process.exit();
+            //process.exit();
         } else {
             await stringEmotes(msg, 'NO');
         }

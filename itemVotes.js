@@ -13,7 +13,7 @@ const { subjectData } = require('./handlers/wkapiHandler.js');
 
 var client, voteChannels, prevCollectors = {}, insertVoting = {};
 
-const electionTime = 600000;
+const electionTime = 10000//600000;
 const winnerTime = 30000;
 
 module.exports = {
@@ -156,20 +156,22 @@ module.exports = {
                 }
                 if (module.exports.active) { // winner message
                     const collectedVotes = totalVotes.map((e, i) => e - randomPair[i].votes);
-                    const winnerIndex = totalVotes.findIndex(v => v >= Math.max(...totalVotes));
+                    const highestVotes = Math.max(...totalVotes);
+                    var winnerIndex = totalVotes.findIndex(v => v == highestVotes);
+                    winnerIndex = winnerIndex == totalVotes.lastIndexOf(highestVotes) ? winnerIndex : null;
+                    var embed = simpleEmbed(winnerIndex !== null ? embedColors.winner : embedColors.neutral, `${itemNames[type]} Voting (${mnemonicNames[mnemonictype]}) - ${dbItem.char} (${dbItem.meaning}) - ` + (winnerIndex !== null ? `Winner ${voteEmotes[winnerIndex]}` : 'Draw'),
+                        (winnerIndex !== null ? `The winner of this voting was decided:\n**Submission ${voteEmotes[winnerIndex]} won!**` : 'There was a tie between the submissions.') + '\n\n'
+                            + `*The next voting will start shortly (max. ${(winnerTime / 1000).toFixed(0)} seconds).*`)
+                        .addFields(...randomPair.map((_, i) => [ // display vote info
+                            { name: '\u200B', value: voteEmotes[i], inline: false },
+                            { name: 'New Votes', value: collectedVotes[i].toString(), inline: true },
+                            { name: 'Previous Votes', value: randomPair[i].votes.toString(), inline: true },
+                            { name: 'Total Votes', value: totalVotes[i].toString(), inline: true },
+                        ]).flat())
+                        .setFooter({ text: '*New Votes* are the votes that a submission acquired in this voting. *Previous Votes* are the ones from previous votings. And, *Total Votes* are the total number of votes for that submission.' });
+                    if (winnerIndex !== null) embed = embed.setImage(randomPair[winnerIndex].thumblink);
                     const winnerMsg = await channel.send({
-                        embeds: [
-                            simpleEmbed(embedColors.winner, `${itemNames[type]} Voting (${mnemonicNames[mnemonictype]}) - ${dbItem.char} (${dbItem.meaning}) - Winner ${voteEmotes[winnerIndex]}`,
-                                `The winner of this voting was decided:\n**Submission ${voteEmotes[winnerIndex]} won!**\n\n*The next voting will start shortly (max. ${(winnerTime/1000).toFixed(0)} seconds).*`)
-                                .addFields(...randomPair.map((_, i) => [ // display vote info
-                                    { name: '\u200B', value: voteEmotes[i], inline: false },
-                                    { name: 'New Votes', value: collectedVotes[i].toString(), inline: true },
-                                    { name: 'Previous Votes', value: randomPair[i].votes.toString(), inline: true },
-                                    { name: 'Total Votes', value: totalVotes[i].toString(), inline: true },
-                                ]).flat(),
-                            ).setImage(randomPair[winnerIndex].thumblink)
-                                .setFooter({ text: '*New Votes* are the votes that a submission acquired in this voting. *Previous Votes* are the ones from previous votings. And, *Total Votes* are the total number of votes for that submission.' })
-                        ]
+                        embeds: [embed]
                     });
                     new Promise(res => setTimeout(res, winnerTime)).then(async () => {
                         await errorAwait(logTag, async () => await winnerMsg.delete(), [], `Collector ${type} - Delete Winner Message`);

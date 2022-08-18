@@ -1,6 +1,6 @@
 {
   "name": "crabigatorbot",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "description": "Discord bot for the unofficial WaniKani Image Mnemonics project.",
   "main": "main.js",
   "scripts": {
