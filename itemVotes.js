@@ -27,11 +27,13 @@ module.exports = {
             v: await client.channels.fetch(vocVoteId),
             info: await client.channels.fetch(voteInfoId),
         };
-        for (const [type, channel] of Object.entries(voteChannels)) {
-            const messages = await channel.messages.fetch({ limit: 99 }).then(e => e.filter(m => m.author.id == clientId));
-            logger(logTag, `Cleanup ${type} - ${Array.from(messages).length} Message(s) Deleted`);
-            await channel.bulkDelete(messages);
-        }
+        for (const type of Object.keys(voteChannels)) module.exports.cleanupChannel(type);
+    },
+    cleanupChannel: async (type) => {
+        const channel = voteChannels[type];
+        const messages = await channel.messages.fetch({ limit: 99 }).then(e => e.filter(m => m.author.id == clientId));
+        logger(logTag, `Cleanup ${type} - ${Array.from(messages).length} Message(s) Deleted`);
+        await channel.bulkDelete(messages);
     },
     insertElection: async (type, pair) => {
         insertVoting[type] = pair;
@@ -77,7 +79,11 @@ module.exports = {
                 embeds: [simpleEmbed(embedColors.neutral, `${itemNames[type]} Voting - None Found`,
                     `There are currently no ${itemNames[type].toLowerCase()} items with multiple submissions so there is nothing to vote on.`)]
             });
-            prevCollectors[type] = msg;
+            prevCollectors[type] = {
+                async stop() {
+                    await msg.delete();
+                }
+            }
             if (module.exports.active) new Promise(res => setTimeout(res, electionTime)).then(() => { if (prevCollectors[type].id == msg.id) module.exports.createElection(type); });
             return false;
         }
