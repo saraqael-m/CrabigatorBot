@@ -13,10 +13,11 @@ const logTag = 'Main';
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
+        GatewayIntentBits.GuildMembers, // get guild member join event
         GatewayIntentBits.GuildMessages,
         GatewayIntentBits.MessageContent,
-        GatewayIntentBits.GuildIntegrations,
-        GatewayIntentBits.GuildMessageReactions,
+        GatewayIntentBits.DirectMessages, // send welcome message
+        GatewayIntentBits.GuildMessageReactions, // reactions poll (item voting)
     ],
     partials: ["CHANNEL"]
 });
@@ -93,11 +94,10 @@ client.on('messageCreate', async msg => {
             logger(logTag, 'The Crabigator is not here anymore :(\n');
             await stringEmotes(msg, ['BB', 'Y', 'E']);
             (await client.channels.fetch(announceId)).send({ content: 'The Crabigator has left.' }).then(() => process.exit());
-            //process.exit();
         } else {
-            await stringEmotes(msg, 'NO');
+            stringEmotes(msg, 'NO');
         }
-    } else if (command == 'accept' || command == 'unaccept') {
+    } else if (command == 'accept' || command == 'unaccept') { // accept/unaccept submissions
         const isUnaccept = command == 'unaccept',
             name = command.charAt(0).toUpperCase() + command.slice(1);
         if (msg.member.roles.cache.some(role => role.id === staffId || role.id === pickerId)) {
@@ -131,9 +131,9 @@ client.on('messageCreate', async msg => {
                 }
             } else await replyMsg('Could not parse arguments.');
         } else {
-            await stringEmotes(msg, 'NO');
+            stringEmotes(msg, 'NO');
         }
-    } else if (command == 'votes') {
+    } else if (command == 'votes') { // show votes for submissions of item
         logger(logTag, 'Votes -', 'Pending');
         const wkId = parseInt(args[0]);
         if (!Number.isNaN(wkId)) {
@@ -147,25 +147,42 @@ client.on('messageCreate', async msg => {
             logger(logTag, 'Votes -', 'Success');
             return true;
         } else await replyMsg('Could not parse argument.');
-    } else if (command == 'elect') {
+    } else if (command == 'elect') { // change next election
         logger(logTag, 'Elect -', 'Pending');
         if (msg.member.roles.cache.some(role => role.id === staffId)) {
             const type = args[0],
                 pair = JSON.parse(args.slice(1).join(' '));
             insertElection(type, pair);
-            await stringEmotes(msg, 'OKAY');
-        } else await stringEmotes(msg, 'NO');
-    } else if (command == 'delete') {
+            stringEmotes(msg, 'OKAY');
+        } else stringEmotes(msg, 'NO');
+    } else if (command == 'delete') { // delete a submission
         logger(logTag, 'Delete -', 'Pending');
         if (msg.member.roles.cache.some(role => role.id === staffId)) {
             const wkId = parseInt(args[0]),
                 subId = parseInt(args[1]);
             if (!Number.isNaN(wkId) && !Number.isNaN(subId)) {
-                if (await update({ wkId: wkId }, { $pull: { submissions: { subId: { $eq: subId } } } })) await stringEmotes(msg, 'DONE');
-                else await stringEmotes(msg, 'FAIL');
+                if (await update({ wkId: wkId }, { $pull: { submissions: { subId: { $eq: subId } } } })) stringEmotes(msg, 'DONE');
+                else stringEmotes(msg, 'FAIL');
             } else await replyMsg('Could not parse arguments.');
-        } else await stringEmotes(msg, 'NO');
+        } else stringEmotes(msg, 'NO');
     }
+});
+
+client.on('guildMemberAdd', async member => {
+    // member welcome message
+    logger(logTag, `User Joined - ${member.tag}`);
+    const msg = await member.send(
+`Hi 👋 Thank you for joining the WaniKani Image Mnemonics project. We're happy to have you here 😄 
+
+First of all, what is this project about? Well, mnemonics are a kind of memory aid in form of a little story containing multiple elements to help you remember them more easily. And https://wanikani.com/ uses these to help you get the reading and meaning of Japanese kanji, vocabulary, and radicals engrained into your head. Although this works very well in its written form, using multiple senses to remember things helps you to recall them more quickly and reliably later. 
+
+That's where this project comes into play! Our aim is to create images corresponding to the mnemonics for the over 9000 items taught on WaniKani. To do that we started creating AI generated images because it's fast and can produce really good results (also you can start doing it for free)! But other artistic forms are also accepted, e.g. if you want to draw something or edit an image together that's very welcome 👍
+
+For more info visit the "getting-started" channel on the server. 
+
+Well then, I have to go now, but I hope to receive a submission from you one of these days. And if you have any questions feel free to ask users with the *Staff* role! 😉`
+    );
+    msg.suppressEmbeds(true);
 });
 
 client.on('interactionCreate', async interaction => {
