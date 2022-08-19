@@ -154,7 +154,7 @@ module.exports = {
                 return false;
             } else await changeEmbed(pendingEmbed(embedTitle, '[###] Saving submission to the database...', embedInfo));
             const [imagelink, thumblink] = links;
-            var subId = dbEntry ? Math.max(...dbEntry.submissions.map(e => e.subId)) + 1 : 1;
+            var subId = dbEntry && dbEntry.submissions.length > 0 ? Math.max(...dbEntry.submissions.map(e => e.subId)) + 1 : 1;
             if (dbEntry) while (dbEntry.submissions.find(s => s.subId == subId)) subId++;
             const newMnemonictype = type == 'r' ? 'm' : mnemonictype;
             newSubmission = {

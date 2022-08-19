@@ -128,9 +128,10 @@ module.exports = {
             }
             const itemsTotal = subjectData.filter(e => (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
                 submissionAmount = dataquery.map(e => e.submissions.length).reduce((p, c) => p + c, 0),
-                itemsCompleted = dataquery.map(e => (e.type == 'r' && e.submissions.length > 0) || (e.submissions.findIndex(s => s.mnemonictype == 'b') !== -1 || (e.submissions.findIndex(s => s.mnemonictype == 'r') !== -1 && e.submissions.findIndex(s => s.mnemonictype == 'm') !== -1))).length;
+                itemsCompleted = dataquery.filter(e => (e.type == 'r' && e.submissions.length > 0) || (e.submissions.findIndex(s => s.mnemonictype == 'b') !== -1 || (e.submissions.findIndex(s => s.mnemonictype == 'r') !== -1 && e.submissions.findIndex(s => s.mnemonictype == 'm') !== -1))).length;
             const itemsStarted = dataquery.filter(e => e.submissions.length > 0).length - itemsCompleted;
-            const percentage = `${(itemsStarted / itemsTotal * 100).toFixed(2)}% (${itemsStarted}/${itemsTotal})`;
+            const progress = itemsStarted / itemsTotal;
+            const percentage = percentToBar(progress) + ` ${(progress * 100).toFixed(2)}% (${itemsStarted}/${itemsTotal})`;
             await changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${percentToBar(percentage, progressbarWidth)}  ${percentage}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
                 .addFields(
                     { name: 'Items Completed', value: itemsCompleted.toString(), inline: true },
