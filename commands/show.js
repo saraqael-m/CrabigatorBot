@@ -5,14 +5,14 @@ const { logger, errorAwait } = require('../helpers/logger.js');
 // requires
 const { SlashCommandBuilder } = require('@discordjs/builders');
 const { errorEmbed, pendingEmbed, successEmbed, pagesEmbed, simpleEmbed } = require('../helpers/embedder.js');
-const { embedColors } = require('../helpers/styler.js');
+const { embedColors, wkItemColors } = require('../helpers/styler.js');
 const { itemInfo } = require('../helpers/messager.js');
 
 // database
 const { finder } = require('../handlers/mongoHandler.js');
 
 // parameters
-const progressbarWidth = 25;
+const progressbarWidth = 30;
 const activeTime = 600000;
 
 // naming schemes
@@ -112,13 +112,14 @@ module.exports = {
         const embedTitle = titles[command];
         const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
-        const percentToBar = (p, n) => {//█▁ or #-
-            let k = parseInt(p * n);
-            return '█'.repeat(k) + '▁'.repeat(n - k);
+        const percentToBar = (p1, p2, n) => { //█▄▁
+            let k1 = parseInt(p1 * n);
+            let k2 = parseInt(p2 * n) - k1;
+            return '█'.repeat(k1) + '▄'.reapeat(k2) + '▁'.repeat(n - k1 - k2);
         }
-        const wholeBar = (a, b, decimals = 2) => {
-            const progress = a / b;
-            return `${percentToBar(progress, progressbarWidth)} ${(progress * 100).toFixed(decimals)}% (${a}/${b})`;
+        const wholeBar = (a, b, total, decimals = 2) => {
+            const progress = b / total;
+            return `${percentToBar(a / total, progress, progressbarWidth)} ${(progress * 100).toFixed(decimals)}% (${b}/${total})`;
         }
 
         const msg = await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
@@ -135,12 +136,14 @@ module.exports = {
                 return false;
             }
             const [minLevel, maxLevel, type] = parameters;
-            const items = subjectData.filter(e => e.data.level >= minLevel && e.data.level <= maxLevel && e.object[0].toLowerCase() == type),
-                itemsDone = await finder({ level: { $gte: minLevel, $lte: maxLevel }, type: type }).then(data => data.map(e => subjectData.find(i => i.id == e.wkId)));
+            const items = subjectData.filter(e => e.data.hidden_at == null && e.data.level >= minLevel && e.data.level <= maxLevel && e.object[0].toLowerCase() == type),
+                itemsDone = await finder({ level: { $gte: minLevel, $lte: maxLevel }, type: type }).then(data => data.filter(e => e.submissions.length > 0));
+            const itemsEither = itemsDone.filter(e => e.submissions.find(s => s.mnemonictype == 'm' || s.mnemonictype == 'r')).map(e => subjectData.find(i => i.id == e.wkId));
+            const itemsBoth = itemsDone.filter(e => type == 'r' ? e.submissions.length > 0 : (e.submissions.find(s => s.mnemonictype == 'r') && e.submissions.find(s => s.mnemonictype == 'm')) || e.submissions.find(s => s.mnemonictype == 'b')).map(e => subjectData.find(i => i.id == e.wkId));
             const itemsMissing = items.filter(e => !itemsDone.find(i => i.id == e.id));
-            const doneList = itemsDone.map(e => e.data.characters || e.data.slug).join(', '),
-                missingList = itemsMissing.map(e => e.data.characters || e.data.slug).join(', ');
-            changeEmbed(successEmbed(embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsDone.length, itemsDone.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}\n\n**Have Submissions:**\n${doneList}`).setTimestamp());
+            const arrToList = arr => arr.map(e => e.data.characters || e.data.slug).join(', ');
+            const [eitherList, bothList, missingList] = [itemsEither, itemsBoth, itemsMissing].map(e => arrToList(e));
+            changeEmbed(simpleEmbed(wkItemColors[type], embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsBoth.length, itemsEither.length, itemsEither.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}` + (type != 'r' ? `\n\n**Only Have ONE Mnemonic:**\n${eitherList}` : '') + `\n\n**Completed Items:**\n${bothList}`).setTimestamp());
         } else if (command == 'progress') {
             const subjectData = require('../handlers/wkapiHandler.js').subjectData;
             const type = interaction.options.getString('type'),
@@ -154,12 +157,12 @@ module.exports = {
                 changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!'));
                 return false;
             }
-            const itemsTotal = subjectData.filter(e => (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
+            const itemsTotal = subjectData.filter(e => (e.data.hidden_at == null) && (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
                 submissionAmount = dataquery.map(e => e.submissions.length).reduce((p, c) => p + c, 0),
                 itemsCompleted = dataquery.filter(e => (e.type == 'r' && e.submissions.length > 0) || (e.submissions.findIndex(s => s.mnemonictype == 'b') !== -1 || (e.submissions.findIndex(s => s.mnemonictype == 'r') !== -1 && e.submissions.findIndex(s => s.mnemonictype == 'm') !== -1))).length;
             const itemsAll = dataquery.filter(e => e.submissions.length > 0).length;
             const itemsStarted = itemsAll - itemsCompleted;
-            changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${wholeBar(itemsAll, itemsTotal)}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
+            changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${wholeBar(itemsCompleted, itemsAll, itemsTotal)}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
                 .addFields(
                     { name: 'Items Completed', value: itemsCompleted.toString(), inline: true },
                     ...(type != 'r' ? [{ name: 'Items Started', value: itemsStarted.toString(), inline: true }] : []),
@@ -230,9 +233,7 @@ module.exports = {
                 }
                 await updatePages(i);
             });
-            collector.on('end', async collected => {
-                await errorAwait(logTag, async () => await interaction.deleteReply(), [], `Collector - Terminate with ${collected.size} Button Press(es)`);
-            });
+            collector.on('end', async collected => await errorAwait(logTag, async () => await interaction.deleteReply(), [], `Collector - Terminate with ${collected.size} Button Press(es)`));
         }
         return true;
     }

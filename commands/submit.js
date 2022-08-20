@@ -34,10 +34,6 @@ module.exports = {
             option.setName('char')
                 .setDescription('Characters of the item (e.g. "大", "大人", or for radicals the meaning "barb").')
                 .setRequired(true))
-        /*.addStringOption(option =>
-                    option.setName('meaning')
-                        .setDescription('Meaning of the item (e.g. "big", "adult", or for radicals the meaning "barb" again).')
-                        .setRequired(true))*/
         .addStringOption(option =>
             option.setName('type')
                 .setDescription('Type of the item (radical, kanji, or vocab).')
@@ -99,7 +95,6 @@ module.exports = {
 
         // get values
         const char = interaction.options.getString('char'),
-            //meaning = interaction.options.getString('meaning'),
             type = interaction.options.getString('type'),
             source = interaction.options.getString('source'),
             prompt = interaction.options.getString('prompt'),
@@ -120,13 +115,15 @@ module.exports = {
 
         // main submission code
         logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
-        //const getMeanings = e => e.map(e => e.meaning.toLowerCase());
-        //const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.slug == meaning || e.data.characters == char || getMeanings(e.data.meanings).includes(meaning.toLowerCase()))));
         const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (e.data.slug == char || e.data.characters == char));
         var newSubmission, submissionPlace;
         if (item == undefined) {
             logger(logTag, `Submit - 1/3 Find Item`, 'Failed');
-            await changeEmbed(errorEmbed(embedTitle, 'Sorry, but the requested item could not be found!', embedInfo));
+            changeEmbed(errorEmbed(embedTitle, 'Sorry, but the requested item could not be found!', embedInfo));
+            return false;
+        } else if (item.data.hidden_at !== null) {
+            logger(logTag, `Submit - 1/3 Find Item`, 'Hidden');
+            changeEmbed(errorEmbed(embedTitle, 'Sorry, but the requested item is hidden!', embedInfo));
             return false;
         } else {
             logger(logTag, `Submit - 1/3 Find Item`, 'Success');
@@ -207,7 +204,7 @@ module.exports = {
             + `**Item:**\n${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n`
             + `**Submission:**\nThis submission was submitted as the ${submissionPlace}. one for this item.\n`
             + `Prompt:${('\n' + newSubmission.prompt).replaceAll('\n', '\n> ')}${newSubmission.remarks != '' ? '\nRemark:' + ('\n' + newSubmission.remarks).replaceAll('\n', '\n> ') : ''}\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
-        await changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
+        changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
         return true;
     },
     async imageAcceptUpload(url, wkId, itemtype, mnemonictype) {
