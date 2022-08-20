@@ -60,7 +60,7 @@ module.exports = {
             insertVoting[type] = undefined;
         } else { // otherwise find all possible pairs
             possiblePairs = db.filter(e => e.type == type).map(e => {
-                if (type == 'r') return e.submissions.length > 1 ? [[pickPair(e.submissions), e.wkId, 'm']] : []; // radicals only have meaning
+                if (type == 'r') return e.submissions.length > 1 && !e.submissions.find(s => s.accepted == true) ? [[pickPair(e.submissions), e.wkId, 'm']] : []; // radicals only have meaning
                 if (e.submissions.find(s => s.mnemonictype == 'b' && s.accepted == true)) return []; // both accepted -> no voting anymore
                 const b = e.submissions.filter(s => s.mnemonictype == 'b'),
                     r = e.submissions.find(s => s.mnemonictype == 'r' && s.accepted == true) ? [] : e.submissions.filter(s => s.mnemonictype == 'r'),

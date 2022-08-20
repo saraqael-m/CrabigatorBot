@@ -41,6 +41,10 @@ module.exports = {
                         .setRequired(false)))
         .addSubcommand(subcommand =>
             subcommand
+                .setName('completed')
+                .setDescription('Show all the done and not yet completed items for this channel.'))
+        .addSubcommand(subcommand =>
+            subcommand
                 .setName('submissions')
                 .setDescription('Show currently submitted images.')
                 .addIntegerOption(option =>
@@ -95,21 +99,40 @@ module.exports = {
                 .setName('mysubmissions')
                 .setDescription('Show images submitted by yourself.')),
     async execute(interaction) {
-        const sub = interaction.options.getSubcommand();
-        logger(logTag, `Show - '${sub}' Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Pending', new Date());
+        const command = interaction.options.getSubcommand();
+        logger(logTag, `Show - '${command}' Initiated by "${(interaction.user != undefined ? interaction.user.username : 'Unknown')}"`, 'Pending', new Date());
 
         // embeds
         const titles = {
             progress: 'Progress',
             submissions: 'Submissions',
-            mysubmissions: 'My Submissions' + (interaction.user != undefined ? ' - ' + interaction.user.username : '')
+            mysubmissions: 'My Submissions' + (interaction.user != undefined ? ' - ' + interaction.user.username : ''),
+            completed: 'Items Completed',
         }
-        const embedTitle = titles[sub];
+        const embedTitle = titles[command];
         const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
         const msg = await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
 
-        if (sub == 'progress') {
+        if (command == 'completed') {
+            const { discord: { channelIds: { itemChannelIds } } } = require('../../tokens.json');
+            const { subjectData } = require('../handlers/wkapiHandler.js');
+            var itemChannels = {};
+            for (const [type, arr] of Object.entries(itemChannelIds)) itemChannels = { ...itemChannels, ...Object.fromEntries(Object.entries(arr).map(a => [a[1], [...a[0].split(', ').map(e => parseInt(e)), type]])) };
+            const parameters = itemChannels[interaction.channelId];
+            if (!parameters) { // not a valid channel
+                changeEmbed(errorEmbed(embedTitle, 'Sorry, but this is not a submission channel.'));
+                new Promise(res => setTimeout(res, 10000)).then(() => interaction.deleteReply()); // wait 10 secs and delete message
+                return false;
+            }
+            const [minLevel, maxLevel, type] = parameters;
+            const items = subjectData.filter(e => e.data.level >= minLevel && e.data.level <= maxLevel && e.object[0].toLowerCase() == type),
+                itemsDone = await finder({ level: { $gte: minLevel, $lte: maxLevel }, type: type }).then(data => data.map(e => subjectData.find(i => i.id == e.wkId)));
+            const itemsMissing = items.filter(e => !itemsDone.find(i => i.id == e.id));
+            const doneList = itemsDone.map(e => e.data.characters || e.data.slug).join(', '),
+                missingList = itemsMissing.map(e => e.data.characters || e.data.slug).join(', ');
+            changeEmbed(successEmbed(embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Do NOT Have Submissions:**\n${missingList}\n\n**Have Submissions:**\n${doneList}`).setTimestamp());
+        } else if (command == 'progress') {
             const subjectData = require('../handlers/wkapiHandler.js').subjectData;
             const type = interaction.options.getString('type'),
                 level = interaction.options.getInteger('level');
@@ -123,16 +146,17 @@ module.exports = {
                 ...(level && { level: level }),
             }), [], 'Progress -', true);
             if (!dataquery) {
-                await changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!'));
+                changeEmbed(errorEmbed(embedTitle, 'Sorry, but there was a database error!'));
                 return false;
             }
             const itemsTotal = subjectData.filter(e => (type == null || e.object[0].toLowerCase() == type) && (level == null || e.data.level == level)).length,
                 submissionAmount = dataquery.map(e => e.submissions.length).reduce((p, c) => p + c, 0),
                 itemsCompleted = dataquery.filter(e => (e.type == 'r' && e.submissions.length > 0) || (e.submissions.findIndex(s => s.mnemonictype == 'b') !== -1 || (e.submissions.findIndex(s => s.mnemonictype == 'r') !== -1 && e.submissions.findIndex(s => s.mnemonictype == 'm') !== -1))).length;
-            const itemsStarted = dataquery.filter(e => e.submissions.length > 0).length - itemsCompleted;
-            const progress = itemsStarted / itemsTotal;
-            const percentage = percentToBar(progress) + ` ${(progress * 100).toFixed(2)}% (${itemsStarted}/${itemsTotal})`;
-            await changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${percentToBar(percentage, progressbarWidth)}  ${percentage}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
+            const itemsAll = dataquery.filter(e => e.submissions.length > 0).length;
+            const itemsStarted = itemsAll - itemsCompleted;
+            const progress = itemsAll / itemsTotal;
+            const percentage = percentToBar(progress, progressbarWidth) + ` ${(progress * 100).toFixed(2)}% (${itemsAll}/${itemsTotal})`;
+            changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${percentToBar(percentage, progressbarWidth)}  ${percentage}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
                 .addFields(
                     { name: 'Items Completed', value: itemsCompleted.toString(), inline: true },
                     ...(type != 'r' ? [{ name: 'Items Started', value: itemsStarted.toString(), inline: true }] : []),
@@ -141,8 +165,8 @@ module.exports = {
                     ...(type != 'r' ? [{ name: 'Reading Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'r')).length.toString(), inline: true }] : []),
                 )
                 .setTimestamp());
-        } else if (sub == 'submissions' || sub == 'mysubmissions') {
-            const onlyUser = sub == 'mysubmissions';
+        } else if (command == 'submissions' || command == 'mysubmissions') {
+            const onlyUser = command == 'mysubmissions';
             const char = onlyUser ? null : interaction.options.getString('char'),
                 meaning = onlyUser ? null : interaction.options.getString('meaning'),
                 type = onlyUser ? null : interaction.options.getString('type'),
@@ -160,7 +184,7 @@ module.exports = {
             }).then(subs => subs.map(item => item.submissions.filter(s => subid != null ? (subid == s.subId) : (s.subId && (mnemonictype == null || s.mnemonictype == mnemonictype) && (user == null || s.user[0] == user.id) && (accepted == null || s.accepted == accepted) && (source == null || s.source == source)))
                 .map(s => ({ char: item.char, meaning: item.meaning, type: item.type, level: item.level, ...s }))).flat().sort((a, b) => b.date - a.date)); // newest to oldest
             if (submissions.length == 0) {
-                await changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
+                changeEmbed(simpleEmbed(embedColors.neutral, 'Submissions - None Found', 'There are no submissions with the selected properties.'))
                 return true;
             }
             var currentSub = 0;

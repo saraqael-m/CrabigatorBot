@@ -10,6 +10,9 @@ const { errorEmbed, pendingEmbed, simpleEmbed } = require('../helpers/embedder.j
 const { itemNames, wkItemNames } = require('../helpers/namer.js');
 const { wkItemColors } = require('../helpers/styler.js');
 
+// database
+const { finder } = require('../handlers/mongoHandler.js');
+
 module.exports = {
     data: new SlashCommandBuilder()
         .setName('mnemonic')
@@ -66,7 +69,8 @@ module.exports = {
                     ...(item.data.meanings != undefined ? [{ name: 'Meaning(s)', value: item.data.meanings.map(e => e.meaning).join(', '), inline: true }] : []),
                     ...(item.data.readings != undefined ? [{ name: 'Reading(s)', value: item.data.readings.map(e => e.reading).join(', '), inline: true }] : []),
                     ...(item.data.parts_of_speech != undefined ? [{ name: 'Word Type', value: item.data.parts_of_speech.join(', '), inline: true }] : []),
-                    { name: 'WK ID', value: item.id.toString(), inline: true }
+                    { name: 'WK ID', value: item.id.toString(), inline: true },
+                    { name: 'Submissions', value: await finder({ wkId: item.id }).then(data => (data.length == 0 ? 0 : data[0].submissions.length).toString()), inline: false }
             );
             if (item.data.character_images != undefined) {
                 const characterImage = item.data.character_images.find(e => e.content_type == 'image/png' && parseInt(e.metadata.dimensions.split('x')[0]) < 1000);

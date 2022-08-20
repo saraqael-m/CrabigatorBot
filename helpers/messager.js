@@ -36,5 +36,5 @@
         }
     },
     itemInfo: (char, type, level) => `For more info on this item use ${'`'}/mnemonic name:${char} type:${type} level:${level}${'`'}.`,
-    subInfo: (char, type, level) => `To see all the submissions for this item use ${'`'}/show submissions char:${char} type:${type} level:${level}${'`'}.`
+    subInfo: (char, type, level) => `To see all the submissions for this item use ${'`'}/show submissions char:${char} type:${type} level:${level}${'`'}.`,
 }

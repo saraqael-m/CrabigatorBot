@@ -57,6 +57,7 @@ module.exports = {
                     { name: 'Midjourney (Paid)', value: 'midjourney_paid' },
                     { name: 'Midjourney (Free)', value: 'midjourney_free' },
                     { name: 'DALL-E 2', value: 'dall-e_2' },
+                    { name: 'Craiyon', value: 'craiyon' },
                     { name: 'Other AI (Commercial)', value: 'commercial' },
                     { name: 'Other AI (Personal)', value: 'personal' },
                     { name: 'Own Drawing', value: 'drawing' }))
@@ -120,7 +121,7 @@ module.exports = {
         logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
         //const getMeanings = e => e.map(e => e.meaning.toLowerCase());
         //const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (type != 'r' ? (e.data.characters == char && getMeanings(e.data.meanings).includes(meaning.toLowerCase())) : (e.data.slug == meaning || e.data.characters == char || getMeanings(e.data.meanings).includes(meaning.toLowerCase()))));
-        const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && e.data.slug == char);
+        const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (e.data.slug == char || e.data.characters == char));
         var newSubmission, submissionPlace;
         if (item == undefined) {
             logger(logTag, `Submit - 1/3 Find Item`, 'Failed');
@@ -178,7 +179,7 @@ module.exports = {
             } else {
                 dbEntry = {
                     "wkId": item.id,
-                    "char": item.data.slug,
+                    "char": item.data.characters || item.data.slug,
                     "meaning": item.data.meanings[0].meaning,
                     "type": type,
                     "level": item.data.level,

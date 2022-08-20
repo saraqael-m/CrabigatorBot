@@ -170,11 +170,11 @@ client.on('messageCreate', async msg => {
 
 client.on('guildMemberAdd', async member => {
     // member welcome message
-    logger(logTag, `User Joined - ${member.tag}`);
+    logger(logTag, `User Joined - ${member.username + '#' + member.discriminator}`);
     const msg = await member.send(
-`Hi 👋 Thank you for joining the WaniKani Image Mnemonics project. We're happy to have you here 😄 
+`Hi 👋 Thank you for joining the WaniKani Image Mnemonics project. We're happy to have you here 😄
 
-First of all, what is this project about? Well, mnemonics are a kind of memory aid in form of a little story containing multiple elements to help you remember them more easily. And https://wanikani.com/ uses these to help you get the reading and meaning of Japanese kanji, vocabulary, and radicals engrained into your head. Although this works very well in its written form, using multiple senses to remember things helps you to recall them more quickly and reliably later. 
+First of all, what is this project about? Well, mnemonics are a kind of memory aid in form of a little story containing multiple elements to help you remember them more easily. And https://wanikani.com/ uses these to help you get the reading and meaning of Japanese kanji, vocabulary, and radicals engrained into your head. Although this works very well in its written form, using multiple senses to remember things helps you to recall them more quickly and reliably later.
 
 That's where this project comes into play! Our aim is to create images corresponding to the mnemonics for the over 9000 items taught on WaniKani. To do that we started creating AI generated images because it's fast and can produce really good results (also you can start doing it for free)! But other artistic forms are also accepted, e.g. if you want to draw something or edit an image together that's very welcome 👍
 
