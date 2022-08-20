@@ -115,7 +115,7 @@ module.exports = {
         const percentToBar = (p1, p2, n) => { //█▄▁
             let k1 = parseInt(p1 * n);
             let k2 = parseInt(p2 * n) - k1;
-            return '█'.repeat(k1) + '▄'.reapeat(k2) + '▁'.repeat(n - k1 - k2);
+            return '█'.repeat(k1) + '▄'.repeat(k2) + '▁'.repeat(n - k1 - k2);
         }
         const wholeBar = (a, b, total, decimals = 2) => {
             const progress = b / total;
@@ -138,12 +138,12 @@ module.exports = {
             const [minLevel, maxLevel, type] = parameters;
             const items = subjectData.filter(e => e.data.hidden_at == null && e.data.level >= minLevel && e.data.level <= maxLevel && e.object[0].toLowerCase() == type),
                 itemsDone = await finder({ level: { $gte: minLevel, $lte: maxLevel }, type: type }).then(data => data.filter(e => e.submissions.length > 0));
-            const itemsEither = itemsDone.filter(e => e.submissions.find(s => s.mnemonictype == 'm' || s.mnemonictype == 'r')).map(e => subjectData.find(i => i.id == e.wkId));
             const itemsBoth = itemsDone.filter(e => type == 'r' ? e.submissions.length > 0 : (e.submissions.find(s => s.mnemonictype == 'r') && e.submissions.find(s => s.mnemonictype == 'm')) || e.submissions.find(s => s.mnemonictype == 'b')).map(e => subjectData.find(i => i.id == e.wkId));
+            const itemsEither = itemsDone.filter(e => !itemsBoth.find(i => i.id == e.wkId) && e.submissions.find(s => s.mnemonictype == 'm' || s.mnemonictype == 'r')).map(e => subjectData.find(i => i.id == e.wkId));
             const itemsMissing = items.filter(e => !itemsDone.find(i => i.id == e.id));
             const arrToList = arr => arr.map(e => e.data.characters || e.data.slug).join(', ');
             const [eitherList, bothList, missingList] = [itemsEither, itemsBoth, itemsMissing].map(e => arrToList(e));
-            changeEmbed(simpleEmbed(wkItemColors[type], embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsBoth.length, itemsEither.length, itemsEither.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}` + (type != 'r' ? `\n\n**Only Have ONE Mnemonic:**\n${eitherList}` : '') + `\n\n**Completed Items:**\n${bothList}`).setTimestamp());
+            changeEmbed(simpleEmbed(wkItemColors[type], embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsBoth.length, itemsEither.length + itemsBoth.length, itemsEither.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}` + (type != 'r' ? `\n\n**Only Have ONE Mnemonic:**\n${eitherList}` : '') + `\n\n**Completed Items:**\n${bothList}`).setTimestamp());
         } else if (command == 'progress') {
             const subjectData = require('../handlers/wkapiHandler.js').subjectData;
             const type = interaction.options.getString('type'),
