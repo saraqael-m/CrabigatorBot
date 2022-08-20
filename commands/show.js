@@ -112,6 +112,15 @@ module.exports = {
         const embedTitle = titles[command];
         const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
+        const percentToBar = (p, n) => {//█▁ or #-
+            let k = parseInt(p * n);
+            return '█'.repeat(k) + '▁'.repeat(n - k);
+        }
+        const wholeBar = (a, b, decimals = 2) => {
+            const progress = a / b;
+            return `${percentToBar(progress, progressbarWidth)} ${(progress * 100).toFixed(decimals)}% (${a}/${b})`;
+        }
+
         const msg = await interaction.reply({ embeds: [pendingEmbed(embedTitle, 'Processing the request...')] });
 
         if (command == 'completed') {
@@ -131,16 +140,12 @@ module.exports = {
             const itemsMissing = items.filter(e => !itemsDone.find(i => i.id == e.id));
             const doneList = itemsDone.map(e => e.data.characters || e.data.slug).join(', '),
                 missingList = itemsMissing.map(e => e.data.characters || e.data.slug).join(', ');
-            changeEmbed(successEmbed(embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Do NOT Have Submissions:**\n${missingList}\n\n**Have Submissions:**\n${doneList}`).setTimestamp());
+            changeEmbed(successEmbed(embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsDone.length, itemsDone.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}\n\n**Have Submissions:**\n${doneList}`).setTimestamp());
         } else if (command == 'progress') {
             const subjectData = require('../handlers/wkapiHandler.js').subjectData;
             const type = interaction.options.getString('type'),
                 level = interaction.options.getInteger('level');
-
-            const percentToBar = (p, n) => {//█▁ or #-
-                let k = parseInt(p * n);
-                return '█'.repeat(k) + '▁'.repeat(n-k);
-            }
+            
             const dataquery = await errorAwait(logTag, async () => await finder({
                 ...(type && { type: type }),
                 ...(level && { level: level }),
@@ -154,9 +159,7 @@ module.exports = {
                 itemsCompleted = dataquery.filter(e => (e.type == 'r' && e.submissions.length > 0) || (e.submissions.findIndex(s => s.mnemonictype == 'b') !== -1 || (e.submissions.findIndex(s => s.mnemonictype == 'r') !== -1 && e.submissions.findIndex(s => s.mnemonictype == 'm') !== -1))).length;
             const itemsAll = dataquery.filter(e => e.submissions.length > 0).length;
             const itemsStarted = itemsAll - itemsCompleted;
-            const progress = itemsAll / itemsTotal;
-            const percentage = percentToBar(progress, progressbarWidth) + ` ${(progress * 100).toFixed(2)}% (${itemsAll}/${itemsTotal})`;
-            changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${percentToBar(percentage, progressbarWidth)}  ${percentage}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
+            changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${wholeBar(itemsAll, itemsTotal)}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
                 .addFields(
                     { name: 'Items Completed', value: itemsCompleted.toString(), inline: true },
                     ...(type != 'r' ? [{ name: 'Items Started', value: itemsStarted.toString(), inline: true }] : []),
