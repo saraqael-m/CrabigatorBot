@@ -165,10 +165,10 @@ module.exports = {
             changeEmbed(successEmbed(embedTitle + ' - ' + (type != null ? itemNames[type] + (type == 'r' ? 's' : '') : 'Items') + (level != null ? ' of Level ' + level : ''), `${wholeBar(itemsCompleted, itemsAll, itemsTotal)}\n\n` + 'To see these submissions use `/show submissions' + (level != null ? ` level:${level}` : '') + (type != null ? ` type:${itemNames[type]}` : '') + '`.')
                 .addFields(
                     { name: 'Items Completed', value: itemsCompleted.toString(), inline: true },
-                    ...(type != 'r' ? [{ name: 'Items Started', value: itemsStarted.toString(), inline: true }] : []),
+                    ...(type != 'r' ? [{ name: 'Partially Completed', value: itemsStarted.toString(), inline: true }] : []),
                     { name: 'Submissions', value: submissionAmount.toString(), inline: false },
-                    ...(type != 'r' ? [{ name: 'Meaning Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'm')).length.toString(), inline: true }] : []),
-                    ...(type != 'r' ? [{ name: 'Reading Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'r')).length.toString(), inline: true }] : []),
+                    ...(type != 'r' ? [{ name: 'Meaning Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'm') != -1).length.toString(), inline: true }] : []),
+                    ...(type != 'r' ? [{ name: 'Reading Done', value: dataquery.filter(i => i.submissions.findIndex(e => e.mnemonictype == 'b') != -1 || i.submissions.findIndex(e => e.mnemonictype == 'r') != -1).length.toString(), inline: true }] : []),
                 )
                 .setTimestamp());
         } else if (command == 'submissions' || command == 'mysubmissions') {
