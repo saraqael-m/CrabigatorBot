@@ -170,7 +170,7 @@ client.on('messageCreate', async msg => {
 
 client.on('guildMemberAdd', async member => {
     // member welcome message
-    logger(logTag, `User Joined - ${member.username + '#' + member.discriminator}`);
+    logger(logTag, `User Joined - ${member.displayName}`);
     const msg = await member.send(
 `Hi 👋 Thank you for joining the WaniKani Image Mnemonics project. We're happy to have you here 😄
 
