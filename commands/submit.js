@@ -112,9 +112,8 @@ module.exports = {
             embedInfo = itemNames[type] + ' ' + char;
         const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
-        //await interaction.reply({ embeds: [pendingEmbed(embedTitle, '[#--] Searching for the item...', embedInfo)] });
-        await interaction.reply({ embeds: [errorEmbed(embedTitle, 'Sorry, the bot is currently being updated.', embedInfo)] });
-        return
+        await interaction.reply({ embeds: [pendingEmbed(embedTitle, '[#--] Searching for the item...', embedInfo)] });
+        
         // main submission code
         logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
         const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (e.data.slug == char || e.data.characters == char));
