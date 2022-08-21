@@ -53,6 +53,9 @@ module.exports = {
                 return [bunnyUrl(imageName), ...(thumbSize ? [bunnyUrl(thumbName)] : [])];
             });
     },
+    async simpleUploadImage(buffer, path) {
+        return await errorAwait(logTag, async () => await bunnyStorage.upload(buffer, path), [], `Upload -`);
+    },
     async downloadImage(path) {
         // folder in path has to have preceeding slash (e.g. "vocab/")
         return await errorAwait(logTag, async a => bunnyStorage.download(a), [path], 'Download -');

@@ -14,7 +14,7 @@ const axios = require('axios');
 const { append, update, finder } = require('../handlers/mongoHandler.js');
 
 // image uploading
-const { uploadImage, deleteImage, folderNames, purgeUrl } = require('../handlers/bunnyHandler.js');
+const { uploadImage, deleteImage, folderNames, purgeUrl, simpleUploadImage } = require('../handlers/bunnyHandler.js');
 const imageNaming = (wkid, itype, mtype, subid, name) => encodeURI(`${wkid}_${itype}${mtype}${subid}_${name}-${new Date().toISOString().match(/[a-zA-Z0-9]/g).join('')}`);
 
 // naming schemes
@@ -53,6 +53,7 @@ module.exports = {
                 .addChoices(
                     { name: 'Midjourney (Paid)', value: 'midjourney_paid' },
                     { name: 'Midjourney (Free)', value: 'midjourney_free' },
+                    { name: 'DreamStudio', value: 'dream'},
                     { name: 'DALL-E 2', value: 'dall-e_2' },
                     { name: 'Craiyon', value: 'craiyon' },
                     { name: 'Other AI (Commercial)', value: 'commercial' },
@@ -111,8 +112,9 @@ module.exports = {
             embedInfo = itemNames[type] + ' ' + char;
         const changeEmbed = async embed => await interaction.editReply({ embeds: [embed] });
 
-        await interaction.reply({ embeds: [pendingEmbed(embedTitle, '[#--] Searching for the item...', embedInfo)] });
-
+        //await interaction.reply({ embeds: [pendingEmbed(embedTitle, '[#--] Searching for the item...', embedInfo)] });
+        await interaction.reply({ embeds: [errorEmbed(embedTitle, 'Sorry, the bot is currently being updated.', embedInfo)] });
+        return
         // main submission code
         logger(logTag, `Submit - Initiated by "${(user != null ? user.username : 'Unknown')}"`, 'Pending', new Date());
         const item = subjectData.find(e => (e.object[0].toLowerCase() == type) && (level == null || e.data.level == level) && (e.data.slug == char || e.data.characters == char));
@@ -173,7 +175,7 @@ module.exports = {
             let func;
             if (dbEntry != undefined) {
                 func = async () => await update(condition, { $push: { submissions: newSubmission } });
-                if (submissionPlace == 1 || (newMnemonictype != 'b' && !dbEntry.submissions.find(s => newMnemonictype == s.mnemonictype))) await module.exports.imageAcceptUpload(imagelink, item.id, type, newMnemonictype);
+                if (submissionPlace == 1 || (newMnemonictype != 'b' && !dbEntry.submissions.find(s => newMnemonictype == s.mnemonictype))) await module.exports.imageAcceptUpload(imagelink, thumblink, item.id, type, newMnemonictype);
             } else {
                 dbEntry = {
                     "wkId": item.id,
@@ -184,7 +186,7 @@ module.exports = {
                     "submissions": [newSubmission],
                 }
                 func = async () => await append(dbEntry);
-                await module.exports.imageAcceptUpload(imagelink, item.id, type, newMnemonictype);
+                await module.exports.imageAcceptUpload(imagelink, thumblink, item.id, type, newMnemonictype);
             }
             if (!(await func())) {
                 logger(logTag, 'Submit - 3/3 Save To Database', 'Failed');
@@ -207,18 +209,20 @@ module.exports = {
         changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
         return true;
     },
-    async imageAcceptUpload(url, wkId, itemtype, mnemonictype) {
+    async imageAcceptUpload(imageUrl, thumbUrl, wkId, itemtype, mnemonictype) {
         const types = mnemonictype == 'b' ? ['r', 'm'] : [mnemonictype];
         const typeNames = {
             r: 'Reading',
             m: 'Meaning',
         }
         for (const type of types) {
-            const path = folderNames[itemtype] + '/' + typeNames[type] + '/' + wkId;
-            const deleted = await deleteImage(path + '.png');
-            if (deleted) await purgeUrl(path + '.png');
-            logger(logTag, 'Accept - Delete Image', 'Sent', !deleted ? 'Nothing to delete' : 'Deleted');
-            logger(logTag, 'Accept - Upload Image', 'Sent', await uploadImage(await getBuffer(url), path));
+            for (const [ext, url] of [['.png', imageUrl], ['-thumb.jpg', thumbUrl]]) {
+                const path = folderNames[itemtype] + '/' + typeNames[type] + '/' + wkId + ext;
+                const deleted = await deleteImage(path);
+                if (deleted) await purgeUrl(path);
+                logger(logTag, 'Accept - Delete Image', 'Sent', !deleted ? 'Nothing to delete' : 'Deleted');
+                logger(logTag, 'Accept - Upload Image', 'Sent', [await simpleUploadImage(await getBuffer(url), path), path]);
+            }
         }
     },
     async updateHashes() {
@@ -231,5 +235,19 @@ module.exports = {
             console.log(updateArray);
             await update({ wkId: item.wkId }, { $set: updateArray });
         }
-    }
+    },
+    /*async updateAll() {
+        await require('../handlers/mongoHandler.js').mongoStartup();
+        const items = await finder({});
+        console.log(items)
+        for (const item of items) {
+            const upload = (sub) => module.exports.imageAcceptUpload(sub.imagelink, sub.thumblink, item.wkId, item.type, sub.mnemonictype);
+            for (const sub of item.submissions) {
+                console.log(sub)
+                upload(sub);
+                console.log(sub.thumblink, sub.imagelink)
+            }
+            for (const sub of item.submissions.filter(s => s.accepted)) upload(sub);
+        }
+    }*/
 };
