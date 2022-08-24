@@ -201,9 +201,9 @@ module.exports = {
 
         // final response
         const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n`
-            + `**Item:**\n[${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})](${item.data.document_url})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n`
-            + `**Submission:**\nSubmission Place: ${submissionPlace}\n\n`
-            + `Prompt:${('\n' + newSubmission.prompt).replaceAll('\n', '\n> ')}${newSubmission.remarks != '' ? '\n\nRemark:' + ('\n' + newSubmission.remarks).replaceAll('\n', '\n> ') : ''}\n\n**Image:**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
+            + `**Item**\n[${item.data.characters != null ? item.data.characters : item.data.slug} (${item.data.meanings[0].meaning})](${item.data.document_url})\n${itemInfo(item.data.slug, itemNames[type], item.data.level)}\n\n`
+            + `**Submission**\nSubmission Place: ${submissionPlace}\n\n`
+            + `Prompt:${('\n' + newSubmission.prompt).replaceAll('\n', '\n> ')}${newSubmission.remarks != '' ? '\n\nRemark:' + ('\n' + newSubmission.remarks).replaceAll('\n', '\n> ') : ''}\n\n**Image**\nThe image was uploaded [here](${newSubmission.imagelink}).`);
         changeEmbed(submitEmbed(embedTitle, response, newSubmission.thumblink, embedInfo));
         return true;
     },

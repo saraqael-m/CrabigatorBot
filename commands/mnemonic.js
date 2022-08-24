@@ -60,7 +60,7 @@ module.exports = {
         } else {
             embedInfo = item.object + ' ' + item.data.characters;
             type = item.object[0].toLowerCase();
-            embedInfo = itemNames[type] + ' ' + item.data.slug + ' (Level ' + item.data.level + ')';
+            embedInfo = `Level ${item.data.level} ${itemNames[type]} ${item.data.slug}`;
             const content = ((items.length != 1 ? '(Randomly selected out of ' + items.length + ' items.)\n\n' : '') + '**Meaning Mnemonic:** ```' + item.data.meaning_mnemonic + '```' + (item.data.meaning_hint != undefined ? ('Hint: ```' + item.data.meaning_hint + '```') : '') + (item.data.reading_mnemonic != undefined ? '\n**Reading Mnemonic:** ```' + item.data.reading_mnemonic + '```' + (item.data.reading_hint != undefined ? ('Hint: ```' + item.data.reading_hint + '```') : '') : ''))
                 .replaceAll('<radical>', '*').replaceAll('</radical>', '*').replaceAll('<kanji>', '*').replaceAll('</kanji>', '*').replaceAll('<vocabulary>', '*').replaceAll('</vocabulary>', '*').replaceAll('<ja>', '').replaceAll('</ja>', '').replaceAll('<reading>', '').replaceAll('</reading>', '');
             var itemEmbed = simpleEmbed(wkItemColors[type], embedTitle + ' - ' + embedInfo, content)
