@@ -143,7 +143,7 @@ module.exports = {
             const itemsMissing = items.filter(e => !((type == 'r' ? itemsBoth : itemsDone.map(e => subjectData.find(i => i.id == e.wkId))).find(i => i.id == e.id)));
             const arrToList = arr => arr.map(e => e.data.characters || e.data.slug).join(', ');
             const [eitherList, bothList, missingList] = [itemsEither, itemsBoth, itemsMissing].map(e => arrToList(e));
-            changeEmbed(simpleEmbed(wkItemColors[type], embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsBoth.length, itemsEither.length + itemsBoth.length, itemsEither.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}` + (type != 'r' ? `\n\n**Only Have ONE Mnemonic:**\n${eitherList}` : '') + `\n\n**Completed Items:**\n${bothList}`).setTimestamp());
+            changeEmbed(simpleEmbed(wkItemColors[type], embedTitle + ` - ${itemNames[type]} from Levels ${minLevel} to ${maxLevel}`, `**Progress:**\n${wholeBar(itemsBoth.length, itemsEither.length + itemsBoth.length, itemsEither.length + itemsBoth.length + itemsMissing.length)}\n\n**Do NOT Have Submissions:**\n${missingList}` + (type != 'r' ? `\n\n**Only Have ONE Mnemonic:**\n${eitherList}` : '') + `\n\n**Completed Items:**\n${bothList}`).setTimestamp());
         } else if (command == 'progress') {
             const subjectData = require('../handlers/wkapiHandler.js').subjectData;
             const type = interaction.options.getString('type'),

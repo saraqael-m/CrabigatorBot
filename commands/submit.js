@@ -197,7 +197,7 @@ module.exports = {
 
         // add submitter role if member does not already have it
         const member = interaction.member;
-        if (!member.roles.cache.some(role => role.id == submitterId)) member.roles.add(submitterId).then(() => member.send(`Congrats ${member.displayName}🥳!\n\nYou just submitted your first image, way to go! We gave you the *Submitter* role so that everyone knows you're one of the chosen ones. Keep on submitting those mnemonic images!\n\nWell then, see you around 😉`));
+        if (member && !member.roles.cache.some(role => role.id == submitterId)) member.roles.add(submitterId).then(() => member.send(`Congrats ${member.displayName}🥳!\n\nYou just submitted your first image, way to go! We gave you the *Submitter* role so that everyone knows you're one of the chosen ones. Keep on submitting those mnemonic images!\n\nWell then, see you around 😉`));
 
         // final response
         const response = String(`*${newSubmission.user[1]}* made a submission for the *${mnemonicNames[mnemonictype]} mnemonic* of a level ${item.data.level} ${itemNames[type]}.\n\n`

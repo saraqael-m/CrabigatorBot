@@ -6,25 +6,22 @@ const { logger, errorAwait } = require('../helpers/logger.js');
 const { wanikani: { apiv2key } } = require('../../tokens.json');
 const fetch = require('node-fetch');
 
-const getEndpoint = async url => await fetch(url, {
+const endpointStruct = token => ({
     method: 'GET',
     headers: {
         'Wanikani-Revision': '20170710',
-        Authorization: 'Bearer ' + apiv2key
+        Authorization: 'Bearer ' + token
     }
-}).then(e => e.json());
+});
 
-// startup
-const subjectDataJSONPath = '../itemdata/subjectData.json';
-module.exports.subjectData = require(subjectDataJSONPath);
-module.exports.subjectsUpdated = false;
+const getEndpoint = async (url, token = apiv2key) => await fetch(url, endpointStruct(token)).then(e => e.json());
 
-const getData = async (path) => {
+const getData = async (path, token) => {
     var data = [], url = 'https://api.wanikani.com/v2/' + path;
     while (1) {
         let result;
         try {
-            result = await getEndpoint(url);
+            result = await getEndpoint(url, token);
         } catch (e) {
             await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1 second
             continue;
@@ -35,6 +32,12 @@ const getData = async (path) => {
     }
     return data;
 }
+
+// startup
+const subjectDataJSONPath = '../itemdata/subjectData.json';
+module.exports.subjectData = require(subjectDataJSONPath);
+module.exports.subjectsUpdated = false;
+
 module.exports.wkapiStartup = async () => {
     // get subject data
     const temp = await errorAwait(logTag, async () => await getData('subjects'), [], 'Retrieve - Subject Data', true);
@@ -43,3 +46,5 @@ module.exports.wkapiStartup = async () => {
         module.exports.subjectsUpdated = true;
     } else logger(logTag, 'Fallback - Subject JSON', 'Used', subjectDataJSONPath);
 }
+
+module.exports.getUserInfo = async token => await getData('user', token);

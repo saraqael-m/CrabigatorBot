@@ -69,10 +69,10 @@ client.on('ready', async () => {
         commands?.create(command.data);
         client.commands.set(command.data.name, command);
     }
+    //require('./artworkSubmitter.js'); // added amandabear mnemonics
     // announce arrival
     logger(logTag, 'The Crabigator is here :)\n');
     (await client.channels.fetch(announceId)).send({ content: 'The Crabigator has arrived.' });
-    //require('./artworkSubmitter.js').submitAll(client); // added amandabear mnemonics
 });
 
 client.on('messageCreate', async msg => {
