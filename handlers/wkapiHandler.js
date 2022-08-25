@@ -26,7 +26,8 @@ const getData = async (path, token) => {
             await new Promise(resolve => setTimeout(resolve, 1000)); // wait 1 second
             continue;
         }
-        data.push(...result.data);
+        if (result.pages) data.push(...result.data);
+        else return result.data;
         url = result.pages.next_url;
         if (url == null) break;
     }
